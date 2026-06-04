@@ -53,12 +53,11 @@ export async function listenToChanges() {
 
                 const dependencies = Object.keys(versionData?.dependencies || {});
                 // TODO: Pass to detection module pkg name, version, script, dependencies, etc
-                // Then we can use the detection module to determine if the package is a good candidate for a vulnerability
                 console.log(JSON.stringify({
                     name: pkg.name,
                     version: latest,
-                    script: versionData.scripts?? {},
-                    dependencies: Object.keys(versionData?.dependencies || {}),
+                    scripts: versionData.scripts ?? {},
+                    dependencies
                 }, null, 2));
 
             }
