@@ -1,9 +1,12 @@
+import { analyzePackage } from "../detection/detector.js";
+
+const HEARTBEAT_INTERVAL = 100;
+let scannedCount = 0;
+
 export async function listenToChanges() {
     console.log("Starting package listener...");
     
-    // The registry info endpoint reports the true latest sequence (update_seq).
-    // NOTE: _changes?limit=1 returns the OLDEST change, not the newest, so it
-    // can't be used to find the current position.
+   
     const initResponse = await fetch("https://replicate.npmjs.com/");
     if (!initResponse.ok) {
         throw new Error(`Failed to get initial seq: ${initResponse.status}`);
@@ -16,58 +19,88 @@ export async function listenToChanges() {
     console.log(`Watching from seq: ${since} (current: ${currentSeq})`);
     
     while (true) {
-        const response = await fetch(
-            `https://replicate.npmjs.com/registry/_changes?since=${since}&limit=100`
-        );
+        try {
+            const response = await fetch(
+                `https://replicate.npmjs.com/registry/_changes?since=${since}&limit=100`
+            );
 
-        if (!response.ok) {
-            console.error(`HTTP error: ${response.status}`);
+            if (!response.ok) {
+                console.log(`failed HTTP request. Error: ${response.status}`);
+                await sleep(5000);
+                continue;
+            }
+
+            const data = await response.json() as {
+                results: { id: string; seq: number }[];
+                last_seq: number;
+            };
+
+            const CONCURRENCY = 8;
+            for (let i = 0; i < data.results.length; i += CONCURRENCY) {
+                const batch = data.results.slice(i, i + CONCURRENCY);
+                await Promise.all(batch.map(processChange));
+            }
+            since = String(data.last_seq);
+            if (data.results.length === 0) {
+                await sleep(5000);
+            }
+        } catch (err) {
+            console.error(`Error polling changes feed:`, (err as Error).message);
             await sleep(5000);
-            continue;
+        }
+    }
+}
+
+async function processChange(change: { id: string }): Promise<void> {
+    if (change.id.startsWith("_design")) return;
+
+    try {
+        const encodedName = change.id.replace("/", "%2F");
+        const pkgResponse = await fetch(`https://registry.npmjs.org/${encodedName}`);
+        if (!pkgResponse.ok) {
+            // 404 = deleted/unpublished package; anything else worth surfacing
+            if (pkgResponse.status !== 404) {
+                console.warn(`${pkgResponse.status} on ${change.id}`);
+            }
+            return;
         }
 
-        const data = await response.json() as { 
-            results: { id: string; seq: string }[]; 
-            last_seq: string 
+        const pkg = await pkgResponse.json() as {
+            name: string;
+            "dist-tags"?: { latest?: string };
+            versions?: Record<string, {
+                scripts?: Record<string, string>;
+                dependencies?: Record<string, string>;
+            }>;
         };
-        
-        for (const change of data.results) {
-            if (change.id.startsWith("_design")) continue;
-            
-            const encodedName = change.id.replace("/", "%2F");
-            const pkgResponse = await fetch(`https://registry.npmjs.org/${encodedName}`);
-            if (!pkgResponse.ok) continue;
 
-            const pkg = await pkgResponse.json() as {
-                name: string;
-                "dist-tags"?: { latest?: string };
-                versions?: Record<string, {
-                    scripts?: Record<string, string>;
-                    dependencies?: Record<string, string>;
-                }>;
-            };
-            
-            const latest = pkg["dist-tags"]?.latest;
-            if (latest && pkg.versions?.[latest]) {
-                const versionData = pkg.versions[latest];
+        const latest = pkg["dist-tags"]?.latest;
+        if (latest && pkg.versions?.[latest]) {
+            const versionData = pkg.versions[latest];
+            const dependencies = Object.keys(versionData?.dependencies || {});
 
-                const dependencies = Object.keys(versionData?.dependencies || {});
-                // TODO: Pass to detection module pkg name, version, script, dependencies, etc
-                console.log(JSON.stringify({
-                    name: pkg.name,
-                    version: latest,
-                    scripts: versionData.scripts ?? {},
-                    dependencies
-                }, null, 2));
+            const findings = analyzePackage({
+                name: pkg.name,
+                version: latest,
+                scripts: versionData.scripts ?? {},
+                dependencies,
+            });
 
+            scannedCount++;
+            if (scannedCount % HEARTBEAT_INTERVAL === 0) {
+                console.log(`[heartbeat] scanned ${scannedCount} packages`);
+            }
+
+            if (findings.length > 0) {
+                console.log(`\n  SUSPICIOUS: ${pkg.name}@${latest}`);
+                for (const finding of findings) {
+                    console.log(`   [${finding.hook}] matched "${finding.pattern}"`);
+                    console.log(`     ${finding.snippet}`);
+                }
             }
         }
-        
-        since = data.last_seq;
-        
-        if (data.results.length === 0) {
-            await sleep(5000);
-        }
+    } catch (err) {
+        console.warn(`Failed to process ${change.id}:`, (err as Error).message);
     }
 }
 
