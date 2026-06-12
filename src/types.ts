@@ -9,4 +9,16 @@ export interface Finding {
     hook: string;
     pattern: string;
     snippet: string;
+    severity: Severity;
 }
+
+
+export interface Rule {
+    id: string;
+    pattern: string;
+    severity: Severity;
+    test: (script: string) => boolean;
+}
+
+
+export type Severity = "low" | "medium" | "high" | "critical";

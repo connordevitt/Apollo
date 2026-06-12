@@ -1,5 +1,6 @@
 import { analyzePackage } from "../detection/detector.js";
 
+
 const HEARTBEAT_INTERVAL = 100;
 let scannedCount = 0;
 

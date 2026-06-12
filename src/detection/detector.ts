@@ -1,4 +1,11 @@
-import type { PackageInfo, Finding } from "../types.js";
+import type { PackageInfo, Finding, Rule } from "../types.js";
+
+const SCRIPT_RULES: Rule[] = [
+    { id: "install-curl", pattern: "curl", severity: "high", test: s => s.includes("curl")},
+    { id: "install-wget", pattern: "wget", severity: "high", test: s => s.includes("wget")},
+    { id: "pipe-sh", pattern: "| sh", severity: "critical", test: s => /\|\s*(ba)?sh/.test(s)},
+    { id: "node-eval", pattern: "node -e", severity: "medium", test: s => s.includes("node -e")},
+];
 
 export function analyzePackage(pkg: PackageInfo): Finding[] {
     const findings: Finding[] = [];
@@ -9,13 +16,16 @@ export function analyzePackage(pkg: PackageInfo): Finding[] {
         const script = pkg.scripts[hook];
         if (!script) continue;
 
-        if (script.includes("curl")) {
+       for (const rule of SCRIPT_RULES) {
+        if (rule.test(script)) {
             findings.push({
-                hook,
-                pattern: "curl",
-                snippet: script
+                hook, 
+                pattern: rule.pattern,
+                snippet: script, 
+                severity: rule.severity,
             });
         }
+       }
     }
     return findings;
 }
