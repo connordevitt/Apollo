@@ -23,6 +23,15 @@ export interface Rule {
 }
 
 
+export interface PackageScore {
+    score: number;
+    verdict: Verdict;
+    findings: Finding[];
+}
+
+
 export type Severity = "low" | "medium" | "high" | "critical";
 
 export type Confidence = "low" | "medium" | "high";
+
+export type Verdict = "quiet" | "watch" | "alert";
