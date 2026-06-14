@@ -1,4 +1,5 @@
 import { analyzePackage } from "../detection/detector.js";
+import { diffInstallScripts, findPreviousVersion } from "../detection/diffs.js";
 
 
 const HEARTBEAT_INTERVAL = 100;
@@ -73,6 +74,7 @@ async function processChange(change: { id: string }): Promise<void> {
                 scripts?: Record<string, string>;
                 dependencies?: Record<string, string>;
             }>;
+                time?: Record<string, string>;
         };
 
         const latest = pkg["dist-tags"]?.latest;
@@ -80,12 +82,22 @@ async function processChange(change: { id: string }): Promise<void> {
             const versionData = pkg.versions[latest];
             const dependencies = Object.keys(versionData?.dependencies || {});
 
-            const findings = analyzePackage({
+            const staticFindings = analyzePackage({
                 name: pkg.name,
                 version: latest,
-                scripts: versionData.scripts ?? {},
+                scripts: versionData?.scripts ?? {},
                 dependencies,
             });
+
+            const previous = findPreviousVersion(pkg.versions, pkg.time ?? {}, latest);
+            const diffFindings = previous
+                ? diffInstallScripts(
+                    pkg.versions[previous]?.scripts ?? {},
+                    versionData.scripts ?? {},
+                )
+                : [];
+
+            const findings = [...staticFindings, ...diffFindings];
 
             scannedCount++;
             if (scannedCount % HEARTBEAT_INTERVAL === 0) {
