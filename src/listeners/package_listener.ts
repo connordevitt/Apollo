@@ -1,6 +1,6 @@
 import { analyzePackage } from "../detection/detector.js";
 import { diffInstallScripts, findPreviousVersion } from "../detection/diffs.js";
-
+import { scorePackage } from "../detection/score.js";
 
 const HEARTBEAT_INTERVAL = 100;
 let scannedCount = 0;
@@ -104,12 +104,14 @@ async function processChange(change: { id: string }): Promise<void> {
                 console.log(`[heartbeat] scanned ${scannedCount} packages`);
             }
 
-            if (findings.length > 0) {
+            const scoreResult = scorePackage(findings);
+            if (scoreResult.verdict !== 'quiet') {
                 console.log(`\n  SUSPICIOUS: ${pkg.name}@${latest}`);
-                for (const finding of findings) {
+                for (const finding of scoreResult.findings) {
                     console.log(`   [${finding.hook}] matched "${finding.pattern}"`);
                     console.log(`     ${finding.snippet}`);
                 }
+                console.log(`\n  SCORE: ${scoreResult.score} (${scoreResult.verdict})`);
             }
         }
     } catch (err) {
