@@ -12,8 +12,8 @@
     "start": "node dist/index.js"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Connor Devitt",
+  "license": "AGPL-3.0-only",
   "description": "Apollo CLI",
   "devDependencies": {
     "@types/node": "^25.9.1",

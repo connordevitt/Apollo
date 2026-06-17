@@ -1,4 +1,4 @@
-//score.ts
+// Copyright (C) 2026 Connor Devitt. Licensed under AGPL-3.0-only.
 import type { Finding, PackageScore, Severity, Confidence } from "../types.js";
 
 const SEVERITY_POINTS: Record<Severity, number> = {

@@ -1,3 +1,4 @@
+// Copyright (C) 2026 Connor Devitt. Licensed under AGPL-3.0-only.
 export interface PackageInfo {
     name: string;
     version: string;

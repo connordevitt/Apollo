@@ -1,3 +1,4 @@
+// Copyright (C) 2026 Connor Devitt. Licensed under AGPL-3.0-only.
 import type { PackageInfo, Finding, Rule } from "../types.js";
 
 const SCRIPT_RULES: Rule[] = [

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Copyright (C) 2026 Connor Devitt. Licensed under AGPL-3.0-only.
 import { listenToChanges } from "./listeners/package_listener.js";
 
 const helloWorld = () => {

@@ -1,3 +1,4 @@
+// Copyright (C) 2026 Connor Devitt. Licensed under AGPL-3.0-only.
 import { analyzePackage } from "../detection/detector.js";
 import { diffInstallScripts, findPreviousVersion } from "../detection/diffs.js";
 import { scorePackage } from "../detection/score.js";
