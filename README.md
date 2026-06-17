@@ -1,16 +1,17 @@
 # Apollo
 
-Apollo watches the npm registry for malicious packages. It listens to the npm change feed in real time, runs each new publish through a set of detection rules, and scores it for suspicious behavior — things like curl/wget in install hooks, piping to shell, newly added postinstall scripts, or changes to existing ones.
+Apollo watches the npm registry for malicious packages. It polls the npm change feed, runs each new publish through a set of detection rules, and scores it for suspicious behavior. Examples of suspicious behavior include curl/wget in install hooks, piping to shell, newly added postinstall scripts, or changes to existing ones.
 
 It's early. The detection is basic right now but the foundation is there.
 
 ## How it works
 
-1. Connects to the npm CouchDB change feed
-2. Fetches full package metadata for each new publish
-3. Runs static analysis on install scripts (`preinstall`, `install`, `postinstall`)
-4. Diffs the current version's scripts against the previous version
-5. Scores the findings and flags anything above a threshold
+1. Gets the current `update_seq` from the npm CouchDB registry, then starts ~500 changes back
+2. Polls the `_changes` feed in batches (`since`/`limit=100`), sleeping 5s when there's nothing new
+3. Fetches full package metadata for each changed package
+4. Runs static analysis on install scripts (`preinstall`, `install`, `postinstall`)
+5. Diffs the current version's scripts against the previous version
+6. Scores the findings and flags anything above a threshold
 
 ## Running it
 
