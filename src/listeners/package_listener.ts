@@ -6,6 +6,9 @@ import { scorePackage } from "../detection/score.js";
 const HEARTBEAT_INTERVAL = 100;
 let scannedCount = 0;
 
+// packageName → { tag → version } — tracks what we've already analyzed
+const seenTags = new Map<string, Record<string, string>>();
+
 export async function listenToChanges() {
     console.log("Starting package listener...");
     
@@ -70,30 +73,41 @@ async function processChange(change: { id: string }): Promise<void> {
 
         const pkg = await pkgResponse.json() as {
             name: string;
-            "dist-tags"?: { latest?: string };
+            "dist-tags"?: Record<string, string>;
             versions?: Record<string, {
                 scripts?: Record<string, string>;
                 dependencies?: Record<string, string>;
             }>;
-                time?: Record<string, string>;
+            time?: Record<string, string>;
         };
 
-        const latest = pkg["dist-tags"]?.latest;
-        if (latest && pkg.versions?.[latest]) {
-            const versionData = pkg.versions[latest];
-            const dependencies = Object.keys(versionData?.dependencies || {});
+        const distTags = pkg["dist-tags"] ?? {};
+        const previousTags = seenTags.get(pkg.name) ?? {};
+
+        // find tags that are new or point to a version we haven't analyzed yet
+        const newVersions = Object.entries(distTags).filter(
+            ([tag, version]) => previousTags[tag] !== version && pkg.versions?.[version]
+        );
+
+        if (newVersions.length === 0) return;
+
+        seenTags.set(pkg.name, { ...distTags });
+
+        for (const [tag, version] of newVersions) {
+            const versionData = pkg.versions![version]!;
+            const dependencies = Object.keys(versionData.dependencies || {});
 
             const staticFindings = analyzePackage({
                 name: pkg.name,
-                version: latest,
-                scripts: versionData?.scripts ?? {},
+                version,
+                scripts: versionData.scripts ?? {},
                 dependencies,
             });
 
-            const previous = findPreviousVersion(pkg.versions, pkg.time ?? {}, latest);
+            const previous = findPreviousVersion(pkg.versions!, pkg.time ?? {}, version);
             const diffFindings = previous
                 ? diffInstallScripts(
-                    pkg.versions[previous]?.scripts ?? {},
+                    pkg.versions![previous]?.scripts ?? {},
                     versionData.scripts ?? {},
                 )
                 : [];
@@ -102,12 +116,12 @@ async function processChange(change: { id: string }): Promise<void> {
 
             scannedCount++;
             if (scannedCount % HEARTBEAT_INTERVAL === 0) {
-                console.log(`[heartbeat] scanned ${scannedCount} packages`);
+                console.log(`[heartbeat] scanned ${scannedCount} versions`);
             }
 
             const scoreResult = scorePackage(findings);
             if (scoreResult.verdict !== 'quiet') {
-                console.log(`\n  SUSPICIOUS: ${pkg.name}@${latest}`);
+                console.log(`\n  SUSPICIOUS: ${pkg.name}@${version} [tag: ${tag}]`);
                 for (const finding of scoreResult.findings) {
                     console.log(`   [${finding.hook}] matched "${finding.pattern}"`);
                     console.log(`     ${finding.snippet}`);
