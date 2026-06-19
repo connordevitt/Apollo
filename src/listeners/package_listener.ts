@@ -6,8 +6,8 @@ import { scorePackage } from "../detection/score.js";
 const HEARTBEAT_INTERVAL = 100;
 let scannedCount = 0;
 
-// packageName → { tag → version } — tracks what we've already analyzed
-const seenTags = new Map<string, Record<string, string>>();
+
+const seenVersions = new Map<string, Set<string>>();
 
 export async function listenToChanges() {
     console.log("Starting package listener...");
@@ -82,19 +82,22 @@ async function processChange(change: { id: string }): Promise<void> {
         };
 
         const distTags = pkg["dist-tags"] ?? {};
-        const previousTags = seenTags.get(pkg.name) ?? {};
+        const seen = seenVersions.get(pkg.name);
+        const allVersions = Object.keys(pkg.versions ?? {});
 
-        // find tags that are new or point to a version we haven't analyzed yet
-        const newVersions = Object.entries(distTags).filter(
-            ([tag, version]) => previousTags[tag] !== version && pkg.versions?.[version]
-        );
+        // first sight: analyze dist-tag targets only; later: any version we haven't seen yet
+        const toAnalyze = seen
+            ? allVersions.filter(v => !seen.has(v))
+            : Object.values(distTags).filter(v => allVersions.includes(v));
 
-        if (newVersions.length === 0) return;
+        // mark everything (analyzed + skipped) as seen, before the early return
+        seenVersions.set(pkg.name, new Set(allVersions));
 
-        seenTags.set(pkg.name, { ...distTags });
+        if (toAnalyze.length === 0) return;
 
-        for (const [tag, version] of newVersions) {
-            const versionData = pkg.versions![version]!;
+        for (const version of toAnalyze) {
+            const versionData = pkg.versions?.[version];
+            if (!versionData) continue;
             const dependencies = Object.keys(versionData.dependencies || {});
 
             const staticFindings = analyzePackage({
@@ -104,10 +107,10 @@ async function processChange(change: { id: string }): Promise<void> {
                 dependencies,
             });
 
-            const previous = previousTags[tag] ?? findPreviousVersion(pkg.versions!, pkg.time ?? {}, version);
+            const previous = findPreviousVersion(pkg.versions ?? {}, pkg.time ?? {}, version);
             const diffFindings = previous
                 ? diffInstallScripts(
-                    pkg.versions![previous]?.scripts ?? {},
+                    pkg.versions?.[previous]?.scripts ?? {},
                     versionData.scripts ?? {},
                 )
                 : [];
@@ -121,7 +124,7 @@ async function processChange(change: { id: string }): Promise<void> {
 
             const scoreResult = scorePackage(findings);
             if (scoreResult.verdict !== 'quiet') {
-                console.log(`\n  SUSPICIOUS: ${pkg.name}@${version} [tag: ${tag}]`);
+                console.log(`\n  SUSPICIOUS: ${pkg.name}@${version}`);
                 for (const finding of scoreResult.findings) {
                     console.log(`   [${finding.hook}] matched "${finding.pattern}"`);
                     console.log(`     ${finding.snippet}`);
