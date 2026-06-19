@@ -35,7 +35,7 @@ export function diffInstallScripts (
                 pattern: `New ${hook} script added`,
                 snippet: after, 
                 severity: "high",
-                confidence: "high",
+                confidence: "medium",
             });
         } else if (before !== after) {
             findings.push({
