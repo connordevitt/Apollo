@@ -104,7 +104,7 @@ async function processChange(change: { id: string }): Promise<void> {
                 dependencies,
             });
 
-            const previous = findPreviousVersion(pkg.versions!, pkg.time ?? {}, version);
+            const previous = previousTags[tag] ?? findPreviousVersion(pkg.versions!, pkg.time ?? {}, version);
             const diffFindings = previous
                 ? diffInstallScripts(
                     pkg.versions![previous]?.scripts ?? {},
