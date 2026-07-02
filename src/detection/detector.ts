@@ -38,3 +38,27 @@ export function analyzePackage(pkg: PackageInfo): Finding[] {
     return findings;
 }
 
+const SOURCE_RULES: Rule[] = [
+    { id: "inline-eval", pattern: "eval(", severity: "low", confidence: "low", test: s => s.includes("eval(")},
+];
+
+export function analyzeSourceFiles(files: Map<string, string>): Finding[] {
+    const findings: Finding[] = [];
+
+    for (const [file, content] of files.entries()) {
+        if (file.endsWith(".js") || file.endsWith(".ts")) {
+        for (const rule of SOURCE_RULES) {
+            if (rule.test(content)) {
+                findings.push({
+                    hook: file,
+                    pattern: rule.pattern,
+                    snippet: content.slice(0, 200),
+                    severity: rule.severity,
+                    confidence: rule.confidence,
+                });
+                }
+            }
+        }
+    }
+    return findings;
+}

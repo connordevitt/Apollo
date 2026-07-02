@@ -1,9 +1,13 @@
 // Copyright (C) 2026 Connor Devitt. Licensed under AGPL-3.0-only.
-import { analyzePackage } from "../detection/detector.js";
+import { analyzePackage, analyzeSourceFiles } from "../detection/detector.js";
 import { diffInstallScripts, findPreviousVersion } from "../detection/diffs.js";
 import { scorePackage } from "../detection/score.js";
+import { fetchTarballFiles } from "./tarball.js";
+import type { Finding } from "../types.js";
 
 const HEARTBEAT_INTERVAL = 100;
+// skip tarballs whose unpacked size exceeds this — nobody feeds us a 500 MB blob
+const MAX_TARBALL_UNPACKED_BYTES = 10_000_000; // 10 MB
 let scannedCount = 0;
 
 
@@ -77,6 +81,7 @@ async function processChange(change: { id: string }): Promise<void> {
             versions?: Record<string, {
                 scripts?: Record<string, string>;
                 dependencies?: Record<string, string>;
+                dist?: { tarball: string; unpackedSize?: number };
             }>;
             time?: Record<string, string>;
         };
@@ -115,7 +120,19 @@ async function processChange(change: { id: string }): Promise<void> {
                 )
                 : [];
 
-            const findings = [...staticFindings, ...diffFindings];
+            // own try/catch: a dead tarball degrades to manifest-only scan, never skips the package
+            let sourceFindings: Finding[] = [];
+            const dist = versionData.dist;
+            if (dist?.tarball && (dist.unpackedSize ?? 0) <= MAX_TARBALL_UNPACKED_BYTES) {
+                try {
+                    const files = await fetchTarballFiles(dist.tarball);
+                    sourceFindings = analyzeSourceFiles(files);
+                } catch (err) {
+                    console.warn(`tarball scan failed for ${pkg.name}@${version}:`, (err as Error).message);
+                }
+            }
+
+            const findings = [...staticFindings, ...diffFindings, ...sourceFindings];
 
             scannedCount++;
             if (scannedCount % HEARTBEAT_INTERVAL === 0) {
