@@ -4,6 +4,9 @@ import { diffInstallScripts, findPreviousVersion } from "../detection/diffs.js";
 import { scorePackage } from "../detection/score.js";
 import { fetchTarballFiles } from "./tarball.js";
 import type { Finding } from "../types.js";
+import { loadCursor, saveCursor } from "../storage/cursor.js";
+
+const FETCH_TIMEOUT_MS = 30_000;
 
 const HEARTBEAT_INTERVAL = 100;
 // skip tarballs whose unpacked size exceeds this — nobody feeds us a 500 MB blob
@@ -15,23 +18,24 @@ const seenVersions = new Map<string, Set<string>>();
 
 export async function listenToChanges() {
     console.log("Starting package listener...");
-    
-   
-    const initResponse = await fetch("https://replicate.npmjs.com/");
+    const initResponse = await fetch("https://replicate.npmjs.com/", { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)});
     if (!initResponse.ok) {
         throw new Error(`Failed to get initial seq: ${initResponse.status}`);
     }
     const initData = await initResponse.json() as { update_seq: number };
-    
-    const currentSeq = initData.update_seq;
-    let since = String(Math.max(0, currentSeq - 500));
-    
-    console.log(`Watching from seq: ${since} (current: ${currentSeq})`);
+    const currentSeq: number = initData.update_seq;
+
+    // fresh machine: start at the live head; resume: rewind 500 seqs for overlap
+    const saved = loadCursor();
+    let cursor = saved === null ? currentSeq : Math.max(0, saved - 500);
+
+    console.log(`Watching from seq: ${cursor} (current: ${currentSeq})`);
     
     while (true) {
         try {
             const response = await fetch(
-                `https://replicate.npmjs.com/registry/_changes?since=${since}&limit=100`
+                `https://replicate.npmjs.com/registry/_changes?since=${cursor}&limit=100`
+                , { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)}
             );
 
             if (!response.ok) {
@@ -50,8 +54,10 @@ export async function listenToChanges() {
                 const batch = data.results.slice(i, i + CONCURRENCY);
                 await Promise.all(batch.map(processChange));
             }
-            since = String(data.last_seq);
+            cursor = data.last_seq;
+            saveCursor(cursor);
             if (data.results.length === 0) {
+                console.log("No new changes found, sleeping for 5 seconds");
                 await sleep(5000);
             }
         } catch (err) {
@@ -66,7 +72,10 @@ async function processChange(change: { id: string }): Promise<void> {
 
     try {
         const encodedName = change.id.replace("/", "%2F");
-        const pkgResponse = await fetch(`https://registry.npmjs.org/${encodedName}`);
+        const pkgResponse = await fetch(`https://registry.npmjs.org/${encodedName}`
+            , { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)}
+        );
+        
         if (!pkgResponse.ok) {
             // 404 = deleted/unpublished package; anything else worth surfacing
             if (pkgResponse.status !== 404) {

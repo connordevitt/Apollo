@@ -1,6 +1,17 @@
 // Copyright (C) 2026 Connor Devitt. Licensed under AGPL-3.0-only.
 import type { PackageInfo, Finding, Rule } from "../types.js";
 
+const TOKEN_NAMES = "NPM_TOKEN|NODE_AUTH_TOKEN|GITHUB_TOKEN|GH_TOKEN|GITLAB_TOKEN|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN";
+
+const envTokenAccess = new RegExp(`process\\.env(\\.|\\[\\s*['"\`])(${TOKEN_NAMES})\\b`);
+const envTokenDestructure = new RegExp(`\\{[^}]*\\b(${TOKEN_NAMES})\\b[^}]*\\}\\s*=\\s*process\\.env`);
+const envDump = /JSON\.stringify\(\s*process\.env\s*\)|Object\.(entries|keys|values)\(\s*process\.env\s*\)/;
+
+const ENV_RULES: Rule[] = [
+    { id: "env-token-read", pattern: "credential env var read", severity: "high", confidence: "medium", test: s => envTokenAccess.test(s) || envTokenDestructure.test(s)},
+    { id: "env-dump", pattern: "full process.env dump", severity: "critical", confidence: "high", test: s => envDump.test(s)},
+];
+
 const SCRIPT_RULES: Rule[] = [
     { id: "install-curl", pattern: "curl", severity: "high", confidence: "high", test: s => s.includes("curl")},
     { id: "install-wget", pattern: "wget", severity: "high", confidence: "high", test: s => s.includes("wget")},
@@ -11,7 +22,7 @@ const SCRIPT_RULES: Rule[] = [
     { id: "inline-eval", pattern: "eval(", severity: "high", confidence: "high", test: s => s.includes("eval(")},
     { id: "webhook-exfil", pattern: "exfil endpoint", severity: "critical", confidence: "high", test: s => /discord(app)?\.com\/api\/webhooks|api\.telegram\.org|webhook\.site|requestbin|pipedream\.net|burpcollaborator\.net|oastify\.com|interact\.sh/i.test(s)},
     { id: "win-cradle", pattern: "certutil/bitsadmin", severity: "high", confidence: "high", test: s => /certutil|bitsadmin/i.test(s)},
-
+    ...ENV_RULES,
 ];
 
 export function analyzePackage(pkg: PackageInfo): Finding[] {
@@ -40,6 +51,10 @@ export function analyzePackage(pkg: PackageInfo): Finding[] {
 
 const SOURCE_RULES: Rule[] = [
     { id: "inline-eval", pattern: "eval(", severity: "low", confidence: "low", test: s => s.includes("eval(")},
+    ...ENV_RULES,
+    // on-disk credential stores; medium confidence — docs and config tooling mention these paths too
+    { id: "npmrc-read", pattern: ".npmrc read", severity: "high", confidence: "medium", test: s => /\.npmrc/.test(s) && /readFile|createReadStream/.test(s)},
+    { id: "ssh-key-read", pattern: "ssh key access", severity: "high", confidence: "medium", test: s => /\.ssh[\/\\]|id_rsa|id_ed25519/.test(s)},
 ];
 
 export function analyzeSourceFiles(files: Map<string, string>): Finding[] {
@@ -55,6 +70,7 @@ export function analyzeSourceFiles(files: Map<string, string>): Finding[] {
                     snippet: content.slice(0, 200),
                     severity: rule.severity,
                     confidence: rule.confidence,
+                    
                 });
                 }
             }

@@ -1,6 +1,6 @@
 // cursor.ts to remember the spot we left off in a scan for index.ts
 
-import { node:fs, readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 
 const CURSOR_FILE = "cursor.json";
@@ -15,16 +15,19 @@ const saveCursor = (cursor: number): void => {
     }
 };
 
-const loadCursor = (): number => {
+// null = no usable saved cursor (missing, corrupt, or not a number);
+// callers decide the fallback — returning 0 here would mean "start of npm history"
+const loadCursor = (): number | null => {
     if (!existsSync(CURSOR_FILE)) {
-        return 0;
+        return null;
     }
     try {
         const data = readFileSync(CURSOR_FILE, "utf8");
-        return JSON.parse(data).cursor;
+        const cursor = JSON.parse(data).cursor;
+        return typeof cursor === "number" ? cursor : null;
     } catch (error) {
         console.error("Failed to load cursor:", error);
-        return 0;
+        return null;
     }
 };
 

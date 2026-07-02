@@ -5,9 +5,10 @@ import { gunzipSync } from "node:zlib";
 // Skip files bigger than this so one huge blob can't balloon memory.
 const MAX_FILE_BYTES = 1_000_000; // 1 MB
 
+const FETCH_TIMEOUT_MS = 30_000;
 
 export async function fetchTarballFiles(tarballUrl: string): Promise<Map<string, string>> {
-    const res = await fetch(tarballUrl);
+    const res = await fetch(tarballUrl, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)});
     if (!res.ok) throw new Error(`tarball download failed: ${res.status}`);
     const gzippedBytes = Buffer.from(await res.arrayBuffer()); 
     const tarBytes = gunzipSync(gzippedBytes);
