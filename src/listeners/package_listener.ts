@@ -16,6 +16,36 @@ let scannedCount = 0;
 
 const seenVersions = new Map<string, Set<string>>();
 
+async function mainLoopIter(saved, cursor) {
+  const response = await fetch(
+    `https://replicate.npmjs.com/registry/_changes?since=${cursor}&limit=100`
+    , { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)}
+  );
+
+  if (!response.ok) {
+    console.log(`failed HTTP request. Error: ${response.status}`);
+    await sleep(5000);
+    return;
+  }
+
+  const data = await response.json() as {
+    results: { id: string; seq: number }[];
+    last_seq: number;
+  };
+
+  const CONCURRENCY = 8;
+  for (let i = 0; i < data.results.length; i += CONCURRENCY) {
+    const batch = data.results.slice(i, i + CONCURRENCY);
+    await Promise.all(batch.map(processChange));
+  }
+  cursor = data.last_seq;
+  saveCursor(cursor);
+  if (data.results.length === 0) {
+    console.log("No new changes found, sleeping for 5 seconds");
+    await sleep(5000);
+  }
+}
+
 export async function listenToChanges() {
     console.log("Starting package listener...");
     const initResponse = await fetch("https://replicate.npmjs.com/", { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)});
@@ -33,33 +63,7 @@ export async function listenToChanges() {
     
     while (true) {
         try {
-            const response = await fetch(
-                `https://replicate.npmjs.com/registry/_changes?since=${cursor}&limit=100`
-                , { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)}
-            );
-
-            if (!response.ok) {
-                console.log(`failed HTTP request. Error: ${response.status}`);
-                await sleep(5000);
-                continue;
-            }
-
-            const data = await response.json() as {
-                results: { id: string; seq: number }[];
-                last_seq: number;
-            };
-
-            const CONCURRENCY = 8;
-            for (let i = 0; i < data.results.length; i += CONCURRENCY) {
-                const batch = data.results.slice(i, i + CONCURRENCY);
-                await Promise.all(batch.map(processChange));
-            }
-            cursor = data.last_seq;
-            saveCursor(cursor);
-            if (data.results.length === 0) {
-                console.log("No new changes found, sleeping for 5 seconds");
-                await sleep(5000);
-            }
+            await mainLoopIter(saved, cursor);
         } catch (err) {
             console.error(`Error polling changes feed:`, (err as Error).message);
             await sleep(5000);
