@@ -22,6 +22,7 @@ const SCRIPT_RULES: Rule[] = [
     { id: "inline-eval", pattern: "eval(", severity: "high", confidence: "high", test: s => s.includes("eval(")},
     { id: "webhook-exfil", pattern: "exfil endpoint", severity: "critical", confidence: "high", test: s => /discord(app)?\.com\/api\/webhooks|api\.telegram\.org|webhook\.site|requestbin|pipedream\.net|burpcollaborator\.net|oastify\.com|interact\.sh/i.test(s)},
     { id: "win-cradle", pattern: "certutil/bitsadmin", severity: "high", confidence: "high", test: s => /certutil|bitsadmin/i.test(s)},
+    { id: "env-exfil", pattern: "env-exfil", severity: "critical", confidence: "high", test: s => envTokenAccess.test(s) && (s.includes("curl") || s.includes("wget") || s.includes("https://"))},
     ...ENV_RULES,
 ];
 
