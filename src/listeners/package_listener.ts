@@ -9,8 +9,8 @@ import { loadCursor, saveCursor } from "../storage/cursor.js";
 const FETCH_TIMEOUT_MS = 30_000;
 
 const HEARTBEAT_INTERVAL = 100;
-// skip tarballs whose unpacked size exceeds this — nobody feeds us a 500 MB blob
-const MAX_TARBALL_UNPACKED_BYTES = 10_000_000; // 10 MB
+// skip tarballs whose unpacked size exceeds this, nobody feeds us a 500 MB blob
+const MAX_TARBALL_UNPACKED_BYTES = 10_000_000; 
 let scannedCount = 0;
 
 
@@ -104,7 +104,7 @@ async function processChange(change: { id: string }): Promise<void> {
             ? allVersions.filter(v => !seen.has(v))
             : Object.values(distTags).filter(v => allVersions.includes(v));
 
-        // mark everything (analyzed + skipped) as seen, before the early return
+        // mark everything analyzed & skipped
         seenVersions.set(pkg.name, new Set(allVersions));
 
         if (toAnalyze.length === 0) return;
@@ -129,7 +129,7 @@ async function processChange(change: { id: string }): Promise<void> {
                 )
                 : [];
 
-            // own try/catch: a dead tarball degrades to manifest-only scan, never skips the package
+            
             let sourceFindings: Finding[] = [];
             const dist = versionData.dist;
             if (dist?.tarball && (dist.unpackedSize ?? 0) <= MAX_TARBALL_UNPACKED_BYTES) {

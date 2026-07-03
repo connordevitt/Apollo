@@ -53,7 +53,7 @@ export function analyzePackage(pkg: PackageInfo): Finding[] {
 const SOURCE_RULES: Rule[] = [
     { id: "inline-eval", pattern: "eval(", severity: "low", confidence: "low", test: s => s.includes("eval(")},
     ...ENV_RULES,
-    // on-disk credential stores; medium confidence — docs and config tooling mention these paths too
+    
     { id: "npmrc-read", pattern: ".npmrc read", severity: "high", confidence: "medium", test: s => /\.npmrc/.test(s) && /readFile|createReadStream/.test(s)},
     { id: "ssh-key-read", pattern: "ssh key access", severity: "high", confidence: "medium", test: s => /\.ssh[\/\\]|id_rsa|id_ed25519/.test(s)},
 ];

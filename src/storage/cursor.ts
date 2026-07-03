@@ -16,7 +16,7 @@ const saveCursor = (cursor: number): void => {
 };
 
 // null = no usable saved cursor (missing, corrupt, or not a number);
-// callers decide the fallback — returning 0 here would mean "start of npm history"
+// callers decide the fallback, returning 0 here would mean "start of npm history"
 const loadCursor = (): number | null => {
     if (!existsSync(CURSOR_FILE)) {
         return null;
