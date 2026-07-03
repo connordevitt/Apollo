@@ -16,33 +16,46 @@ let scannedCount = 0;
 
 const seenVersions = new Map<string, Set<string>>();
 
-async function mainLoopIter(saved, cursor) {
-  const response = await fetch(
-    `https://replicate.npmjs.com/registry/_changes?since=${cursor}&limit=100`
-    , { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)}
-  );
+interface RegistryChange {
+  id: string;
+  seq: number;
+}
 
-  if (!response.ok) {
-    console.log(`failed HTTP request. Error: ${response.status}`);
-    await sleep(5000);
-    return;
+async function* produceChanges(saved, cursor): AsyncGenerator<RegistryChange, never, void> {
+  while (true) {
+    const response = await fetch(
+      `https://replicate.npmjs.com/registry/_changes?since=${cursor}&limit=100`
+      , { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)}
+    );
+    if (!response.ok) {
+      console.log(`failed HTTP request. Error: ${response.status}`);
+      await sleep(5000);
+      continue;
+    }
+
+    const data = await response.json() as {
+      results: RegistryChange[];
+      last_seq: number;
+    };
+
+    if (data.results.length == 0) {
+      console.log("No new changes found, sleeping for 5 seconds");
+      await sleep(5000);
+    }
+
+    for (let res of data.results) {
+      yield res;
+    }
+    cursor = data.last_seq;
+    saveCursor(cursor);
   }
+}
 
-  const data = await response.json() as {
-    results: { id: string; seq: number }[];
-    last_seq: number;
-  };
-
-  const CONCURRENCY = 8;
-  for (let i = 0; i < data.results.length; i += CONCURRENCY) {
-    const batch = data.results.slice(i, i + CONCURRENCY);
-    await Promise.all(batch.map(processChange));
-  }
-  cursor = data.last_seq;
-  saveCursor(cursor);
-  if (data.results.length === 0) {
-    console.log("No new changes found, sleeping for 5 seconds");
-    await sleep(5000);
+async function worker(workerId: number, results) {
+  // ⚠️ I’m not 100% sure if it’s safe to concurrently consume an async generator
+  // like this.  I *think* it is, but I’m not sure.
+  for await (const res of results) {
+    await processChange(res);
   }
 }
 
@@ -60,15 +73,11 @@ export async function listenToChanges() {
     let cursor = saved === null ? currentSeq : Math.max(0, saved - 500);
 
     console.log(`Watching from seq: ${cursor} (current: ${currentSeq})`);
-    
-    while (true) {
-        try {
-            await mainLoopIter(saved, cursor);
-        } catch (err) {
-            console.error(`Error polling changes feed:`, (err as Error).message);
-            await sleep(5000);
-        }
-    }
+
+    const changes = produceChanges(saved, cursor);
+    const CONCURRENCY = 8;
+    const workers = Array.from({ length: CONCURRENCY }).map((_, i) => worker(i, changes));
+    await Promise.all(workers);
 }
 
 async function processChange(change: { id: string }): Promise<void> {
