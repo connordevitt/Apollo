@@ -8,7 +8,7 @@ It's early. The detection is basic right now but the foundation is there.
 
 1. Gets the current `update_seq` from the npm CouchDB registry, then starts ~500 changes back
 2. Polls the `_changes` feed in batches (`since`/`limit=100`), sleeping 5s when there's nothing new
-3. Fetches full package metadata for each changed package
+3. Fetches full package metadata for each changed package with 8 workers. Watermark is used to track the last completed sequence number.
 4. Runs static analysis on install scripts (`preinstall`, `install`, `postinstall`)
 5. Diffs the current version's scripts against the previous version
 6. Scores the findings and flags anything above a threshold
