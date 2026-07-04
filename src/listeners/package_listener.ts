@@ -13,8 +13,52 @@ const HEARTBEAT_INTERVAL = 100;
 const MAX_TARBALL_UNPACKED_BYTES = 10_000_000; 
 let scannedCount = 0;
 
+interface RegistryChange {
+    id: string;
+    seq: number;
+}
 
 const seenVersions = new Map<string, Set<string>>();
+async function* produceChanges(cursor: number): AsyncGenerator<RegistryChange, never, void> {
+    while (true) {
+        try {
+             const response = await fetch(
+            `https://replicate.npmjs.com/registry/_changes?since=${cursor}&limit=100`
+            , { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)}
+        );
+
+        if (!response.ok) {
+            console.log(`failed http request. Error: ${response.status}`);
+            await sleep(5000);
+            continue;
+        }
+        const data = await response.json() as {
+            results: RegistryChange[];
+            last_seq: number;
+        };
+
+        if (data.results.length === 0) {
+            console.log("No new changes were found. To sleep we go...")
+            await sleep(5000);
+        }
+        for (const res of data.results) {
+            yield res;
+        }
+
+        cursor = data.last_seq;
+        saveCursor(cursor);
+        } catch (err) {
+            console.error(`Error polling changes feed:`, (err as Error).message);
+            await sleep(5000);
+        }
+    } 
+}
+
+async function worker(results: AsyncGenerator<RegistryChange>): Promise<void> {
+    for await (const res of results) {
+        await processChange(res);
+    }
+}
 
 export async function listenToChanges() {
     console.log("Starting package listener...");
@@ -30,41 +74,11 @@ export async function listenToChanges() {
     let cursor = saved === null ? currentSeq : Math.max(0, saved - 500);
 
     console.log(`Watching from seq: ${cursor} (current: ${currentSeq})`);
-    
-    while (true) {
-        try {
-            const response = await fetch(
-                `https://replicate.npmjs.com/registry/_changes?since=${cursor}&limit=100`
-                , { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)}
-            );
 
-            if (!response.ok) {
-                console.log(`failed HTTP request. Error: ${response.status}`);
-                await sleep(5000);
-                continue;
-            }
-
-            const data = await response.json() as {
-                results: { id: string; seq: number }[];
-                last_seq: number;
-            };
-
-            const CONCURRENCY = 8;
-            for (let i = 0; i < data.results.length; i += CONCURRENCY) {
-                const batch = data.results.slice(i, i + CONCURRENCY);
-                await Promise.all(batch.map(processChange));
-            }
-            cursor = data.last_seq;
-            saveCursor(cursor);
-            if (data.results.length === 0) {
-                console.log("No new changes found, sleeping for 5 seconds");
-                await sleep(5000);
-            }
-        } catch (err) {
-            console.error(`Error polling changes feed:`, (err as Error).message);
-            await sleep(5000);
-        }
-    }
+    const changes = produceChanges(cursor);
+    const CONCURRENCY = 8;
+    const workers = Array.from({ length: CONCURRENCY}, () => worker(changes))
+    await Promise.all(workers);
 }
 
 async function processChange(change: { id: string }): Promise<void> {

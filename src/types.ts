@@ -30,7 +30,6 @@ export interface PackageScore {
     findings: Finding[];
 }
 
-
 export type Severity = "low" | "medium" | "high" | "critical";
 
 export type Confidence = "low" | "medium" | "high";
