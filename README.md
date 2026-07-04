@@ -16,7 +16,7 @@ It's early. The detection is basic right now but the foundation is there.
 ## Running it
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 

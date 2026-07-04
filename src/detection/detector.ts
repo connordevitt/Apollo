@@ -7,8 +7,11 @@ const envTokenAccess = new RegExp(`process\\.env(\\.|\\[\\s*['"\`])(${TOKEN_NAME
 const envTokenDestructure = new RegExp(`\\{[^}]*\\b(${TOKEN_NAMES})\\b[^}]*\\}\\s*=\\s*process\\.env`);
 const envDump = /JSON\.stringify\(\s*process\.env\s*\)|Object\.(entries|keys|values)\(\s*process\.env\s*\)/;
 
+// Known exfil endpoints 
+const WEBHOOK = /discord(app)?\.com\/api\/webhooks|api\.telegram\.org|webhook\.site|requestbin|pipedream\.net|burpcollaborator\.net|oastify\.com|interact\.sh/i;
+
 const ENV_RULES: Rule[] = [
-    { id: "env-token-read", pattern: "credential env var read", severity: "high", confidence: "medium", test: s => envTokenAccess.test(s) || envTokenDestructure.test(s)},
+    { id: "env-token-read", pattern: "credential env var read", severity: "low", confidence: "low", test: s => envTokenAccess.test(s) || envTokenDestructure.test(s)},
     { id: "env-dump", pattern: "full process.env dump", severity: "critical", confidence: "high", test: s => envDump.test(s)},
 ];
 
@@ -20,10 +23,9 @@ const SCRIPT_RULES: Rule[] = [
     { id: "raw-ip-url", pattern: "http(s)://", severity: "high", confidence: "high", test: s => /http(s)?:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(s)},
     { id: "base64-decode", pattern: "base64 decode", severity: "high", confidence: "high", test: s => /Buffer\.from\([^)]*base64/.test(s) || s.includes("atob(")},
     { id: "inline-eval", pattern: "eval(", severity: "high", confidence: "high", test: s => s.includes("eval(")},
-    { id: "webhook-exfil", pattern: "exfil endpoint", severity: "critical", confidence: "high", test: s => /discord(app)?\.com\/api\/webhooks|api\.telegram\.org|webhook\.site|requestbin|pipedream\.net|burpcollaborator\.net|oastify\.com|interact\.sh/i.test(s)},
+    { id: "webhook-exfil", pattern: "exfil endpoint", severity: "critical", confidence: "high", test: s => WEBHOOK.test(s)},
     { id: "win-cradle", pattern: "certutil/bitsadmin", severity: "high", confidence: "high", test: s => /certutil|bitsadmin/i.test(s)},
     { id: "env-exfil", pattern: "env-exfil", severity: "critical", confidence: "high", test: s => envTokenAccess.test(s) && (s.includes("curl") || s.includes("wget") || s.includes("https://"))},
-    ...ENV_RULES,
 ];
 
 export function analyzePackage(pkg: PackageInfo): Finding[] {
@@ -56,7 +58,10 @@ const SOURCE_RULES: Rule[] = [
     
     { id: "npmrc-read", pattern: ".npmrc read", severity: "high", confidence: "medium", test: s => /\.npmrc/.test(s) && /readFile|createReadStream/.test(s)},
     { id: "ssh-key-read", pattern: "ssh key access", severity: "high", confidence: "medium", test: s => /\.ssh[\/\\]|id_rsa|id_ed25519/.test(s)},
+    { id: "cred-exfil-webhook", pattern: "credential exfil to webhook", severity: "critical", confidence: "high", test: s => envTokenAccess.test(s) && WEBHOOK.test(s)},
+
 ];
+
 
 export function analyzeSourceFiles(files: Map<string, string>): Finding[] {
     const findings: Finding[] = [];

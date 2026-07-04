@@ -18,6 +18,10 @@ interface RegistryChange {
     seq: number;
 }
 
+let watermark = 0;
+const pending: number[] = [];
+const completed = new Set<number>();
+
 const seenVersions = new Map<string, Set<string>>();
 async function* produceChanges(cursor: number): AsyncGenerator<RegistryChange, never, void> {
     while (true) {
@@ -42,11 +46,11 @@ async function* produceChanges(cursor: number): AsyncGenerator<RegistryChange, n
             await sleep(5000);
         }
         for (const res of data.results) {
+            markDispatched(res.seq);
             yield res;
         }
 
         cursor = data.last_seq;
-        saveCursor(cursor);
         } catch (err) {
             console.error(`Error polling changes feed:`, (err as Error).message);
             await sleep(5000);
@@ -54,9 +58,24 @@ async function* produceChanges(cursor: number): AsyncGenerator<RegistryChange, n
     } 
 }
 
+function markDispatched(seq: number): void {
+    pending.push(seq);
+}
+
+function markCompleted(seq: number): void {
+    completed.add(seq);
+    while (pending.length > 0 && completed.has(pending[0]!)) {
+        const done = pending.shift()!;
+        completed.delete(done);
+        watermark = done;
+    }
+    saveCursor(watermark);
+}
+
 async function worker(results: AsyncGenerator<RegistryChange>): Promise<void> {
     for await (const res of results) {
         await processChange(res);
+        markCompleted(res.seq);
     }
 }
 
@@ -72,6 +91,7 @@ export async function listenToChanges() {
     // fresh machine: start at the live head; resume: rewind 500 seqs for overlap
     const saved = loadCursor();
     let cursor = saved === null ? currentSeq : Math.max(0, saved - 500);
+    watermark = cursor;
 
     console.log(`Watching from seq: ${cursor} (current: ${currentSeq})`);
 
@@ -164,7 +184,7 @@ async function processChange(change: { id: string }): Promise<void> {
 
             const scoreResult = scorePackage(findings);
             if (scoreResult.verdict !== 'quiet') {
-                console.log(`\n  SUSPICIOUS: ${pkg.name}@${version}`);
+                console.log(`\n  SUSPICIOUS: ${pkg.name}@${version}{${pkg.time?.["modified"]}}`);
                 for (const finding of scoreResult.findings) {
                     console.log(`   [${finding.hook}] matched "${finding.pattern}"`);
                     console.log(`     ${finding.snippet}`);
