@@ -179,7 +179,7 @@ async function processChange(change: { id: string }): Promise<void> {
 
             scannedCount++;
             if (scannedCount % HEARTBEAT_INTERVAL === 0) {
-                console.log(`[heartbeat] scanned ${scannedCount} versions`);
+                console.log(`[heartbeat] scanned ${scannedCount} versions (watermark: ${watermark})`);
             }
 
             const scoreResult = scorePackage(findings);
