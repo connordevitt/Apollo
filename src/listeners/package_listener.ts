@@ -5,6 +5,7 @@ import { scorePackage } from "../detection/score.js";
 import { fetchTarballFiles } from "./tarball.js";
 import type { Finding } from "../types.js";
 import { loadCursor, saveCursor } from "../storage/cursor.js";
+import { saveFindings } from "../storage/findings.js";
 
 const FETCH_TIMEOUT_MS = 30_000;
 
@@ -190,6 +191,9 @@ async function processChange(change: { id: string }): Promise<void> {
                     console.log(`     ${finding.snippet}`);
                 }
                 console.log(`\n  SCORE: ${scoreResult.score} (${scoreResult.verdict})`);
+            } 
+            if (scoreResult.score >= 7) {
+                saveFindings(findings);
             }
         }
     } catch (err) {
