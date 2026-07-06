@@ -3,7 +3,7 @@
 - **Status:** Suspected malicious.
 - **Date:** 2026-07-05
 - **Source:** Apollo scanner (`findings.jsonl`), corroborated with npm registry metadata only (no tarball downloaded or executed)
-- **Verdict:** High confidence typosquat/impersonation of `debug` with a credential-stealing `postinstall` hook
+- **Verdict:** Suspected supply-chain attack — combosquat/brand impersonation of `debug` (name + `-cli`) delivering a credential-accessing `postinstall` hook. Flagged by Socket; not yet confirmed by source review.
 
 ## Summary
 
