@@ -18,7 +18,7 @@ interface RegistryChange {
     id: string;
     seq: number;
 }
-
+let rewindTarget: number | null = null;     
 let watermark = 0;
 const pending: number[] = [];
 const completed = new Set<number>();
@@ -70,6 +70,10 @@ function markCompleted(seq: number): void {
         completed.delete(done);
         watermark = done;
     }
+    if (rewindTarget !== null && watermark >= rewindTarget) {
+        console.log(`[catch-up] replayed the 500-seq rewind overlap (passed ${rewindTarget})`);
+        rewindTarget = null;
+    }
     saveCursor(watermark);
 }
 
@@ -91,6 +95,7 @@ export async function listenToChanges() {
 
     // fresh machine: start at the live head; resume: rewind 500 seqs for overlap
     const saved = loadCursor();
+    rewindTarget = saved;
     let cursor = saved === null ? currentSeq : Math.max(0, saved - 500);
     watermark = cursor;
 
