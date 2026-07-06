@@ -11,13 +11,9 @@ const envDump = /JSON\.stringify\(\s*process\.env\b|Object\.(entries|keys|values
 const WEBHOOK = /discord(app)?\.com\/api\/webhooks|api\.telegram\.org|webhook\.site|requestbin|pipedream\.net|burpcollaborator\.net|oastify\.com|interact\.sh/i;
 
 const NETWORK_SINK = /\bfetch\s*\(|\b(https?|http2)\.(request|get)\b|\bXMLHttpRequest\b|\baxios\b|\bgot\s*\(|\bnode-fetch\b|\bundici\b|\bfollow-redirects\b|\bsuperagent\b|\bneedle\b|\bWebSocket\s*\(|net\.(connect|createConnection)|dns\.(promises\.)?(lookup|resolve)|(require|import)\s*\(\s*['"`](node:)?(https?|http2|dns|net|undici|follow-redirects|ws|superagent|needle|request)['"`]\s*\)|\bcurl\b|\bwget\b|\bnslookup\b|\bdig\s|\bnc\s/i;
-
 const FS_READ = /readFileSync|readFile|createReadStream|openSync|\.open\(|readdirSync|readdir/;
-
 const SSH_PATH = /\.ssh[\/\\]|id_rsa|id_ed25519|id_ecdsa|authorized_keys/;
 const NPMRC_PATH = /\.npmrc/;
-
-
 const FIRST_PARTY = /(^|\.)(github|githubusercontent|npmjs|yarnpkg|gitlab|bitbucket|amazonaws|googleapis|azure)\.(com|org|net|io)$/i;
 const URL_LITERAL = /https?:\/\/[^\s'"`)]+/i;
 
