@@ -149,16 +149,19 @@ async function processChange(change: { id: string }): Promise<void> {
             if (!versionData) continue;
             const dependencies = Object.keys(versionData.dependencies || {});
 
-            const staticFindings = analyzePackage({
+            const pkgInfo = {
                 name: pkg.name,
                 version,
                 scripts: versionData.scripts ?? {},
                 dependencies,
-            });
+            };
+
+            const staticFindings = analyzePackage(pkgInfo);
 
             const previous = findPreviousVersion(pkg.versions ?? {}, pkg.time ?? {}, version);
             const diffFindings = previous
                 ? diffInstallScripts(
+                    pkgInfo,
                     pkg.versions?.[previous]?.scripts ?? {},
                     versionData.scripts ?? {},
                 )
@@ -170,7 +173,7 @@ async function processChange(change: { id: string }): Promise<void> {
             if (dist?.tarball && (dist.unpackedSize ?? 0) <= MAX_TARBALL_UNPACKED_BYTES) {
                 try {
                     const files = await fetchTarballFiles(dist.tarball);
-                    sourceFindings = analyzeSourceFiles(files);
+                    sourceFindings = analyzeSourceFiles(pkgInfo, files);
                 } catch (err) {
                     console.warn(`tarball scan failed for ${pkg.name}@${version}:`, (err as Error).message);
                 }

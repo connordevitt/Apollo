@@ -40,6 +40,8 @@ export function analyzePackage(pkg: PackageInfo): Finding[] {
        for (const rule of SCRIPT_RULES) {
         if (rule.test(script)) {
             findings.push({
+                package: pkg.name,
+                version: pkg.version,
                 hook, 
                 pattern: rule.pattern,
                 snippet: script, 
@@ -63,7 +65,7 @@ const SOURCE_RULES: Rule[] = [
 ];
 
 
-export function analyzeSourceFiles(files: Map<string, string>): Finding[] {
+export function analyzeSourceFiles(pkg: PackageInfo, files: Map<string, string>): Finding[] {
     const findings: Finding[] = [];
 
     for (const [file, content] of files.entries()) {
@@ -71,7 +73,9 @@ export function analyzeSourceFiles(files: Map<string, string>): Finding[] {
         for (const rule of SOURCE_RULES) {
             if (rule.test(content)) {
                 findings.push({
-                    hook: file,
+                    package: pkg.name,
+                    version: pkg.version,
+                    hook: file.replace("package/", ""),
                     pattern: rule.pattern,
                     snippet: content.slice(0, 200),
                     severity: rule.severity,

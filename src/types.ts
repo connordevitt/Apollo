@@ -7,6 +7,8 @@ export interface PackageInfo {
 }
 
 export interface Finding {
+    package: string;
+    version: string;
     hook: string;
     pattern: string;
     snippet: string;

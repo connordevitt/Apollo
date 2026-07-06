@@ -1,5 +1,5 @@
 // Copyright (C) 2026 Connor Devitt. Licensed under AGPL-3.0-only.
-import type { Finding } from "../types.js";
+import type { Finding, PackageInfo } from "../types.js";
 
 export function findPreviousVersion(
     versions: Record<string, unknown>,
@@ -18,6 +18,7 @@ export function findPreviousVersion(
 const INSTALL_HOOKS = ["preinstall", "install", "postinstall"];
 
 export function diffInstallScripts (
+    pkg: PackageInfo,
     previousScripts: Record<string, string>, 
     currentScripts: Record<string, string>,
 ): Finding[] {
@@ -31,6 +32,8 @@ export function diffInstallScripts (
 
         if (!before) {
             findings.push({
+                package: pkg.name,
+                version: pkg.version,
                 hook,
                 pattern: `New ${hook} script added`,
                 snippet: after, 
@@ -39,6 +42,8 @@ export function diffInstallScripts (
             });
         } else if (before !== after) {
             findings.push({
+                package: pkg.name,
+                version: pkg.version,
                 hook, 
                 pattern: `${hook} hook has changed`,
                 snippet: after,
