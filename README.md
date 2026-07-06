@@ -33,6 +33,28 @@ Watching from seq: 115259798 (current: 115260298)
   SCORE: 7.8 (alert)
 ```
 
+## Storage: 
+
+Findings are stored in `findings.jsonl`. It's a newline-delimited JSON file.
+
+```json
+{
+  "hook": "package/dist/index.js",
+  "pattern": "full process.env dump",
+  "snippet": "console.log(process.env);"
+  "severity": "critical",
+  "confidence": "high"
+}
+```
+
+Cursor is used to store the sequence last seen and pick up where it left off.
+
+```json
+{
+  "sequence": 115260298
+}
+```
+
 ## License
 
 AGPL-3.0-only. See [LICENSE](./LICENSE).
