@@ -16,12 +16,14 @@
   "license": "AGPL-3.0-only",
   "description": "Apollo CLI",
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^25.9.1",
     "@types/tar-stream": "^3.1.4",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   },
   "dependencies": {
+    "express": "^5.2.1",
     "tar-stream": "^3.2.0"
   }
 }
