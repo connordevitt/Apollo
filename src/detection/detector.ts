@@ -17,11 +17,24 @@ const NPMRC_PATH = /\.npmrc/;
 const FIRST_PARTY = /(^|\.)(github|githubusercontent|npmjs|yarnpkg|gitlab|bitbucket|amazonaws|googleapis|azure)\.(com|org|net|io)$/i;
 const URL_LITERAL = /https?:\/\/[^\s'"`)]+/i;
 
+// Stop at $ and { too, so a template-literal URL like `https://api.github.com${path}`
+// yields the host "api.github.com", not "api.github.com${path}".
 function hostOf(url: string): string | null {
-    const m = /^https?:\/\/([^\/?#:\s'"`)]+)/i.exec(url);
+    const m = /^https?:\/\/([^\/?#:\s'"`)${]+)/i.exec(url);
     return m ? m[1]! : null;
 }
 
+function isInternalHost(host: string): boolean {
+    if (host === "localhost" || host.startsWith("127.") || host.startsWith("10.") || host.startsWith("192.168.") || host.startsWith("169.254.")) {
+        return true;
+    }
+    const parts = host.split(".");
+    const second = Number(parts[1]);
+    if (host.startsWith("172.") && second >= 16 && second <= 31) {
+        return true;
+    }
+    return false;
+}
 const B64_DECODE = /Buffer\.from\([^)]*['"`]base64['"`]|atob\s*\(|base64\s+(-d|--decode)/i;
 const HOST_RECON = /\bwhoami\b|\bhostname\b|\buname\b|\bid\s+-u\b|os\.(hostname|userInfo)\s*\(/i;
 
@@ -55,7 +68,7 @@ function credExfil(s: string, creds: RegExp, window = 600): boolean {
     if (urls.length === 0) return true;
     return !urls.every(j => {
         const host = hostOf(s.slice(j, j + 200));
-        return host !== null && FIRST_PARTY.test(host);
+        return host !== null && (FIRST_PARTY.test(host) || isInternalHost(host));
     });
 }
 
@@ -63,14 +76,14 @@ function credExfil(s: string, creds: RegExp, window = 600): boolean {
 const SCRIPT_RULES: Rule[] = [
     { id: "install-curl", pattern: "curl", severity: "high", confidence: "high", test: s => /\bcurl\b/.test(s) },
     { id: "install-wget", pattern: "wget", severity: "high", confidence: "high", test: s => /\bwget\b/.test(s) },
-    { id: "pipe-sh", pattern: "pipe to interpreter", severity: "critical", confidence: "high", test: s => /\|\s*((ba)?sh|node|python3?|perl|ruby)\b/.test(s) },
+    { id: "pipe-sh", pattern: "pipe to interpreter", severity: "critical", confidence: "high", test: s => /(?<!\|)\|\s*((ba)?sh|node|python3?|perl|ruby)\b/.test(s) },
     { id: "download-exec", pattern: "download + execute", severity: "critical", confidence: "high", test: s => /\b(curl|wget)\b/.test(s) && /(\||&&|;)\s*(node|python3?|perl|ruby|sh|bash|\.\/)/.test(s) },
     { id: "raw-ip-url", pattern: "http(s)://<ip>", severity: "high", confidence: "high", test: s => /https?:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(s) },
     { id: "inline-eval", pattern: "eval(", severity: "high", confidence: "medium", test: s => /\beval\s*\(/.test(s) },
     { id: "webhook-exfil", pattern: "exfil endpoint", severity: "critical", confidence: "high", test: s => WEBHOOK.test(s) },
     { id: "win-cradle", pattern: "certutil/bitsadmin", severity: "high", confidence: "high", test: s => /\b(certutil|bitsadmin)\b/i.test(s) },
     { id: "recon-exfil", pattern: "host recon + network exfil", severity: "critical", confidence: "high", test: s => near(s, HOST_RECON, NETWORK_SINK, 300) },
-    { id: "node-e-payload", pattern: "node -e payload", severity: "high", confidence: "high", test: s => /node\s+-e\b/.test(s) && (/\beval\s*\(/.test(s) || B64_DECODE.test(s) || /child_process|execSync|spawn/.test(s) || NETWORK_SINK.test(s)) },
+    { id: "node-e-payload", pattern: "node -e payload", severity: "high", confidence: "high", test: s => /node\s+-e\b/.test(s) && (/\beval\s*\(/.test(s) || B64_DECODE.test(s) || NETWORK_SINK.test(s)) },
     { id: "env-exfil", pattern: "env-exfil", severity: "critical", confidence: "high", test: s => (envTokenAccess.test(s) || envTokenDestructure.test(s)) && NETWORK_SINK.test(s) },
 ];
 
