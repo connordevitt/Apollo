@@ -90,7 +90,7 @@ const SCRIPT_RULES: Rule[] = [
 export function analyzePackage(pkg: PackageInfo): Finding[] {
     const findings: Finding[] = [];
 
-    const installHooks = ["preinstall", "install", "postinstall"];
+    const installHooks = ["preinstall", "install", "postinstall", "prepare"];
 
     for (const hook of installHooks) {
         const script = pkg.scripts[hook];
@@ -125,6 +125,7 @@ const SOURCE_RULES: Rule[] = [
     { id: "env-token-read", pattern: "credential env var read", severity: "low", confidence: "low", test: s => envTokenAccess.test(s) || envTokenDestructure.test(s) },
     { id: "ssh-key-read", pattern: "ssh key file read", severity: "medium", confidence: "low", test: s => near(s, SSH_PATH, FS_READ, 200) },
     { id: "npmrc-read", pattern: ".npmrc read", severity: "medium", confidence: "low", test: s => near(s, NPMRC_PATH, FS_READ, 200) },
+    { id: "webhook-exfil", pattern: "webhook exfil", severity: "critical", confidence: "medium", test: s => WEBHOOK.test(s) },
 ];
 
 export function analyzeSourceFiles(pkg: PackageInfo, files: Map<string, string>): Finding[] {
@@ -132,7 +133,7 @@ export function analyzeSourceFiles(pkg: PackageInfo, files: Map<string, string>)
     const seenPatterns = new Set<string>();
 
     for (const [file, content] of files.entries()) {
-        if (!file.endsWith(".js") && !file.endsWith(".ts")) continue;
+        if (!file.endsWith(".js") && !file.endsWith(".ts") && !file.endsWith(".mjs") && !file.endsWith(".cjs")) continue;
 
         for (const rule of SOURCE_RULES) {
             if (seenPatterns.has(rule.id)) continue;
