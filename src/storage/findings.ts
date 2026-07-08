@@ -12,7 +12,7 @@ export function saveFindings(findings: Finding[]) {
     const existingFindings = readFileSync(FINDINGS_FILE, 'utf8').split('\n').filter(line => line.trim() !== '').map(line => JSON.parse(line));
     const newFindings = findings.filter(finding => !existingFindings.some(existing =>
         existing.package === finding.package &&
-        existing.version === finding.version &&
+        existing.snippet === finding.snippet &&
         existing.hook === finding.hook &&
         existing.pattern === finding.pattern
     ));

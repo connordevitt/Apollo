@@ -33,6 +33,14 @@ export interface PackageScore {
     findings: Finding[];
 }
 
+
+export interface PackageRecord { 
+    package: string;
+    version: string;
+    score: number;
+    verdict: Verdict;
+}
+
 export type Severity = "low" | "medium" | "high" | "critical";
 
 export type Confidence = "low" | "medium" | "high";

@@ -6,6 +6,7 @@ import { fetchTarballFiles } from "./tarball.js";
 import type { Finding } from "../types.js";
 import { loadCursor, saveCursor } from "../storage/cursor.js";
 import { saveFindings } from "../storage/findings.js";
+import { savePackages } from "../storage/package.js";
 
 const FETCH_TIMEOUT_MS = 30_000;
 
@@ -202,6 +203,12 @@ async function processChange(change: { id: string }): Promise<void> {
             } 
             if (scoreResult.score >= 7) {
                 saveFindings(findings);
+                savePackages([{
+                    package: pkg.name,
+                    version,
+                    score: scoreResult.score,
+                    verdict: scoreResult.verdict,
+                }]);
             }
         }
     } catch (err) {
