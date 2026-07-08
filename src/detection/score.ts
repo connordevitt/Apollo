@@ -18,9 +18,12 @@ const FACTOR: Record<Confidence, number> = {
 export function scorePackage(findings: Finding[]): PackageScore {
      let total = 0;
      for (const f of findings) {
-        total += (SEVERITY_POINTS[f.severity] ?? 0) * (FACTOR[f.confidence] ?? 0);
+        const points = Math.round((SEVERITY_POINTS[f.severity] ?? 0) * (FACTOR[f.confidence] ?? 0));
+        f.score = points;
+        total += points;
      }
      const verdict = total === 0 ? 'quiet' : total < 4 ? 'watch' : 'alert';
+     
      return {
         score: total,
         verdict,

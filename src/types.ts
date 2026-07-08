@@ -10,6 +10,7 @@ export interface Finding {
     package: string;
     version: string;
     hook: string;
+    score?: number;
     pattern: string;
     snippet: string;
     severity: Severity;
