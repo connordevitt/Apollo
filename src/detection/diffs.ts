@@ -15,7 +15,7 @@ export function findPreviousVersion(
     return published[latestIdx - 1] ?? null;
 }
 
-const INSTALL_HOOKS = ["preinstall", "install", "postinstall"];
+const INSTALL_HOOKS = ["preinstall", "install", "postinstall", "prepare"];
 
 export function diffInstallScripts (
     pkg: PackageInfo,
