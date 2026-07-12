@@ -113,19 +113,31 @@ export function analyzePackage(pkg: PackageInfo): Finding[] {
     return findings;
 }
 
+
+function extractEvidence(source: string, evidence?: RegExp): string {
+    if (!evidence) return source.slice(0, 200);
+    const index = source.search(evidence);
+    if (index < 0) return source.slice(0, 200);
+
+    const start = source.lastIndexOf("\n", Math.max(0, index - 150));
+    const end = source.indexOf("\n", index + 250);
+
+    return source.slice(start < 0 ? 0 : start + 1, end < 0 ? source.length : end);
+}
+
 // ── Source-file rules ───────────────────────────────────────────────────────
 const SOURCE_RULES: Rule[] = [
     // Compound / high-confidence — real exfil shapes.
-    { id: "cred-exfil", pattern: "credential read + network sink", severity: "critical", confidence: "high", test: s => credExfil(s, new RegExp(`${envTokenAccess.source}|${envTokenDestructure.source}`)) },
-    { id: "envdump-exfil", pattern: "process.env dump + network sink", severity: "critical", confidence: "high", test: s => near(s, envDump, NETWORK_SINK, 400) },
-    { id: "ssh-exfil", pattern: "ssh key read + network sink", severity: "critical", confidence: "high", test: s => near(s, SSH_PATH, FS_READ, 200) && NETWORK_SINK.test(s) },
-    { id: "npmrc-exfil", pattern: ".npmrc read + network sink", severity: "critical", confidence: "high", test: s => near(s, NPMRC_PATH, NETWORK_SINK, 400) },
-    { id: "eval-payload", pattern: "eval of decoded payload", severity: "high", confidence: "high", test: s => near(s, /\beval\s*\(/, B64_DECODE, 200) },
-    { id: "env-dump", pattern: "process.env dump", severity: "low", confidence: "low", test: s => envDump.test(s) },
-    { id: "env-token-read", pattern: "credential env var read", severity: "low", confidence: "low", test: s => envTokenAccess.test(s) || envTokenDestructure.test(s) },
-    { id: "ssh-key-read", pattern: "ssh key file read", severity: "medium", confidence: "low", test: s => near(s, SSH_PATH, FS_READ, 200) },
-    { id: "npmrc-read", pattern: ".npmrc read", severity: "medium", confidence: "low", test: s => near(s, NPMRC_PATH, FS_READ, 200) },
-    { id: "webhook-exfil", pattern: "webhook exfil", severity: "critical", confidence: "medium", test: s => WEBHOOK.test(s) },
+    { id: "cred-exfil", pattern: "credential read + network sink", severity: "critical", confidence: "high", test: s => credExfil(s, new RegExp(`${envTokenAccess.source}|${envTokenDestructure.source}`)), evidence: new RegExp(`${envTokenAccess.source}|${envTokenDestructure.source}`) },
+    { id: "envdump-exfil", pattern: "process.env dump + network sink", severity: "critical", confidence: "high", test: s => near(s, envDump, NETWORK_SINK, 400), evidence: envDump },
+    { id: "ssh-exfil", pattern: "ssh key read + network sink", severity: "critical", confidence: "high", test: s => near(s, SSH_PATH, FS_READ, 200) && NETWORK_SINK.test(s), evidence: SSH_PATH },
+    { id: "npmrc-exfil", pattern: ".npmrc read + network sink", severity: "critical", confidence: "high", test: s => near(s, NPMRC_PATH, NETWORK_SINK, 400), evidence: NPMRC_PATH },
+    { id: "eval-payload", pattern: "eval of decoded payload", severity: "high", confidence: "high", test: s => near(s, /\beval\s*\(/, B64_DECODE, 200), evidence: new RegExp(`${B64_DECODE.source}|\\beval\\s*\\(`, "i") },
+    { id: "env-dump", pattern: "process.env dump", severity: "low", confidence: "low", test: s => envDump.test(s), evidence: envDump },
+    { id: "env-token-read", pattern: "credential env var read", severity: "low", confidence: "low", test: s => envTokenAccess.test(s) || envTokenDestructure.test(s), evidence: new RegExp(`${envTokenAccess.source}|${envTokenDestructure.source}`) },
+    { id: "ssh-key-read", pattern: "ssh key file read", severity: "medium", confidence: "low", test: s => near(s, SSH_PATH, FS_READ, 200), evidence: SSH_PATH },
+    { id: "npmrc-read", pattern: ".npmrc read", severity: "medium", confidence: "low", test: s => near(s, NPMRC_PATH, FS_READ, 200), evidence: NPMRC_PATH },
+    { id: "webhook-exfil", pattern: "webhook exfil", severity: "critical", confidence: "medium", test: s => WEBHOOK.test(s), evidence: WEBHOOK },
 ];
 
 export function analyzeSourceFiles(pkg: PackageInfo, files: Map<string, string>): Finding[] {
@@ -144,7 +156,7 @@ export function analyzeSourceFiles(pkg: PackageInfo, files: Map<string, string>)
                     version: pkg.version,
                     hook: file.replace("package/", ""),
                     pattern: rule.pattern,
-                    snippet: content.slice(0, 200),
+                    snippet: extractEvidence(content, rule.evidence),
                     severity: rule.severity,
                     confidence: rule.confidence,
                 });

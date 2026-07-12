@@ -24,6 +24,7 @@ export interface Rule {
     severity: Severity;
     confidence: Confidence;
     test: (script: string) => boolean;
+    evidence?: RegExp;
 }
 
 
