@@ -7,4 +7,7 @@ const helloWorld = () => {
 }
 
 helloWorld();
-listenToChanges();
+listenToChanges().catch(error => {
+    console.error("Apollo had a fatal error on startup:", error);
+    process.exit(1);
+})
