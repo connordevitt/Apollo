@@ -13,6 +13,7 @@ export interface Finding {
     score?: number;
     pattern: string;
     snippet: string;
+    line?: number;
     severity: Severity;
     confidence: Confidence;
 }

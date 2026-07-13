@@ -114,15 +114,23 @@ export function analyzePackage(pkg: PackageInfo): Finding[] {
 }
 
 
-function extractEvidence(source: string, evidence?: RegExp): string {
-    if (!evidence) return source.slice(0, 200);
+function extractEvidence(
+    source: string,
+    evidence?: RegExp,
+): { snippet: string; line?: number } {
+    if (!evidence) return { snippet: source.slice(0, 200) };
     const index = source.search(evidence);
-    if (index < 0) return source.slice(0, 200);
-
+    if (index < 0) return { snippet: source.slice(0, 200) };
     const start = source.lastIndexOf("\n", Math.max(0, index - 150));
     const end = source.indexOf("\n", index + 250);
-
-    return source.slice(start < 0 ? 0 : start + 1, end < 0 ? source.length : end);
+    const line = source.slice(0, index).split("\n").length;
+    return {
+        snippet: source.slice(
+            start < 0 ? 0 : start + 1,
+            end < 0 ? source.length : end,
+        ),
+        line,
+    };
 }
 
 // ── Source-file rules ───────────────────────────────────────────────────────
@@ -143,6 +151,7 @@ const SOURCE_RULES: Rule[] = [
 export function analyzeSourceFiles(pkg: PackageInfo, files: Map<string, string>): Finding[] {
     const findings: Finding[] = [];
     const seenPatterns = new Set<string>();
+    
 
     for (const [file, content] of files.entries()) {
         if (!file.endsWith(".js") && !file.endsWith(".ts") && !file.endsWith(".mjs") && !file.endsWith(".cjs")) continue;
@@ -150,13 +159,15 @@ export function analyzeSourceFiles(pkg: PackageInfo, files: Map<string, string>)
         for (const rule of SOURCE_RULES) {
             if (seenPatterns.has(rule.id)) continue;
             if (rule.test(content)) {
+                const evidence = extractEvidence(content, rule.evidence)
                 seenPatterns.add(rule.id);
                 findings.push({
                     package: pkg.name,
                     version: pkg.version,
                     hook: file.replace("package/", ""),
                     pattern: rule.pattern,
-                    snippet: extractEvidence(content, rule.evidence),
+                    snippet: evidence.snippet,
+                    line: evidence.line,
                     severity: rule.severity,
                     confidence: rule.confidence,
                 });
