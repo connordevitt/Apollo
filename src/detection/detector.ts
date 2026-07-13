@@ -154,7 +154,7 @@ export function analyzeSourceFiles(pkg: PackageInfo, files: Map<string, string>)
     
 
     for (const [file, content] of files.entries()) {
-        if (!file.endsWith(".js") && !file.endsWith(".ts") && !file.endsWith(".mjs") && !file.endsWith(".cjs")) continue;
+        if (!file.endsWith(".js") && !file.endsWith(".ts") && !file.endsWith(".mjs") && !file.endsWith(".cjs") && !file.endsWith(".jsx") && !file.endsWith(".tsx")) continue;
 
         for (const rule of SOURCE_RULES) {
             if (seenPatterns.has(rule.id)) continue;
