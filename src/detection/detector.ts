@@ -148,14 +148,15 @@ const SOURCE_RULES: Rule[] = [
     { id: "webhook-exfil", pattern: "webhook exfil", severity: "critical", confidence: "medium", test: s => WEBHOOK.test(s), evidence: WEBHOOK },
 ];
 
+const SOURCE_EXTENSIONS = [".js", ".ts", ".mjs", ".cjs", ".jsx", ".tsx"];
+
 export function analyzeSourceFiles(pkg: PackageInfo, files: Map<string, string>): Finding[] {
     const findings: Finding[] = [];
     const seenPatterns = new Set<string>();
     
 
     for (const [file, content] of files.entries()) {
-        if (!file.endsWith(".js") && !file.endsWith(".ts") && !file.endsWith(".mjs") && !file.endsWith(".cjs") && !file.endsWith(".jsx") && !file.endsWith(".tsx")) continue;
-
+        if (!SOURCE_EXTENSIONS.some(ext => file.endsWith(ext))) continue;
         for (const rule of SOURCE_RULES) {
             if (seenPatterns.has(rule.id)) continue;
             if (rule.test(content)) {
