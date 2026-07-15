@@ -121,14 +121,11 @@ function extractEvidence(
     if (!evidence) return { snippet: source.slice(0, 200) };
     const index = source.search(evidence);
     if (index < 0) return { snippet: source.slice(0, 200) };
-    const start = source.lastIndexOf("\n", Math.max(0, index - 150));
-    const end = source.indexOf("\n", index + 250);
+    const start = source.lastIndexOf("\n", index) + 1;
+    const end = source.indexOf("\n", index);
     const line = source.slice(0, index).split("\n").length;
     return {
-        snippet: source.slice(
-            start < 0 ? 0 : start + 1,
-            end < 0 ? source.length : end,
-        ),
+        snippet: source.slice(start, end < 0 ? source.length : end).trim().slice(0, 300),
         line,
     };
 }
