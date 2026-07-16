@@ -1,13 +1,9 @@
 // cursor.ts to remember the spot we left off in a scan for index.ts
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
-import path from "node:path";
+import { readFileSync, writeFileSync, existsSync} from "node:fs";
 
 const CURSOR_FILE = "cursor.json";
 const saveCursor = (cursor: number): void => {
-    if (!existsSync(CURSOR_FILE)) {
-        mkdirSync(path.dirname(CURSOR_FILE), { recursive: true });
-    }
     try {
         writeFileSync(CURSOR_FILE, JSON.stringify({ cursor }, null, 2));
     } catch (error) {
