@@ -1,16 +1,19 @@
 // cursor.ts to remember the spot we left off in a scan for index.ts
 
-import { readFileSync, writeFileSync, existsSync} from "node:fs";
+import { readFileSync, writeFileSync, existsSync, renameSync} from "node:fs";
 
 const CURSOR_FILE = "cursor.json";
+const TEMP_FILE = "tempcursor.json";
 const saveCursor = (cursor: number): void => {
     try {
-        writeFileSync(CURSOR_FILE, JSON.stringify({ cursor }, null, 2));
+        writeFileSync(TEMP_FILE, JSON.stringify({ cursor }, null, 2));
+        renameSync(TEMP_FILE, CURSOR_FILE);
+        console.log(`Cursor saved successfully: ${cursor}`);
     } catch (error) {
         console.error("Failed to save cursor:", error);
     }
 };
-
+ 
 // null = no usable saved cursor (missing, corrupt, or not a number);
 // callers decide the fallback, returning 0 here would mean "start of npm history"
 const loadCursor = (): number | null => {
@@ -27,4 +30,7 @@ const loadCursor = (): number | null => {
     }
 };
 
-export { saveCursor, loadCursor };
+
+
+
+export { saveCursor, loadCursor};
