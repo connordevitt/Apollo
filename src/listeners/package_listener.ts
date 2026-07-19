@@ -65,17 +65,21 @@ function markDispatched(seq: number): void {
 }
 
 function markCompleted(seq: number): void {
+    const before = watermark;
     completed.add(seq);
     while (pending.length > 0 && completed.has(pending[0]!)) {
         const done = pending.shift()!;
         completed.delete(done);
         watermark = done;
     }
-    if (rewindTarget !== null && watermark >= rewindTarget) {
-        console.log(`[catch-up] replayed the 500-seq rewind overlap (passed ${rewindTarget})`);
-        rewindTarget = null;
+
+    if (watermark !== before) {
+        saveCursor(watermark);
+        if (rewindTarget !== null && watermark >= rewindTarget) {
+            console.log(`[catch-up] replayed the 500-seq rewind overlap (passed ${rewindTarget})`);
+            rewindTarget = null;
+        }
     }
-    saveCursor(watermark);
 }
 
 async function worker(results: AsyncGenerator<RegistryChange>): Promise<void> {
@@ -196,7 +200,9 @@ async function processChange(change: { id: string }): Promise<void> {
             if (scoreResult.verdict !== 'quiet') {
                 console.log(`\n  SUSPICIOUS: ${pkg.name}@${version}{${pkg.time?.["modified"]}}`);
                 for (const finding of scoreResult.findings) {
-                    console.log(`   [${finding.hook}] matched "${finding.pattern}"`);
+                    console.log(
+                        ` [${finding.hook}${finding.line != null ? `:${finding.line}` : ""}] matched "${finding.pattern}"`
+                    );
                     console.log(`     ${finding.snippet}`);
                 }
                 console.log(`\n  SCORE: ${scoreResult.score} (${scoreResult.verdict})`);

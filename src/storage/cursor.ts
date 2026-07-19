@@ -1,16 +1,38 @@
 // cursor.ts to remember the spot we left off in a scan for index.ts
 
-import { readFileSync, writeFileSync, existsSync, renameSync} from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 
 const CURSOR_FILE = "cursor.json";
-const TEMP_FILE = "tempcursor.json";
+const MAX_ATTEMPTS = 5;
+
+function sleepSync(ms: number): void {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+    }
+}
+
 const saveCursor = (cursor: number): void => {
-    try {
-        writeFileSync(TEMP_FILE, JSON.stringify({ cursor }, null, 2));
-        renameSync(TEMP_FILE, CURSOR_FILE);
-        console.log(`Cursor saved successfully: ${cursor}`);
-    } catch (error) {
-        console.error("Failed to save cursor:", error);
+    const payload = JSON.stringify({ cursor }, null, 2);
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+            // Direct write is more reliable on Windows than temp+rename under load.
+            writeFileSync(CURSOR_FILE, payload);
+            if (attempt === 1) {
+                console.log(`Cursor saved successfully: ${cursor}`);
+            } else {
+                console.log(`Cursor saved successfully: ${cursor} (attempt ${attempt})`);
+            }
+            return;
+        } catch (error) {
+            const code = (error as NodeJS.ErrnoException).code;
+            if ((code === "EPERM" || code === "EBUSY") && attempt < MAX_ATTEMPTS) {
+                sleepSync(20 * attempt);
+                continue;
+            }
+            console.error("Failed to save cursor:", error);
+            return;
+        }
     }
 };
  
