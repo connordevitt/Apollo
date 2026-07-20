@@ -1,6 +1,7 @@
 // cursor.ts to remember the spot we left off in a scan for index.ts
 
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { logger } from "../logger.js";
 
 const CURSOR_FILE = "cursor.json";
 const MAX_ATTEMPTS = 5;
@@ -30,7 +31,7 @@ const saveCursor = (cursor: number): void => {
                 sleepSync(20 * attempt);
                 continue;
             }
-            console.error("Failed to save cursor:", error);
+            logger.error({ err: error, cursor }, "Failed to save cursor");
             return;
         }
     }
