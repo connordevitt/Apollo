@@ -15,7 +15,7 @@ export function createLogger(options: LoggerOptions = {}): Logger {
     const {
         level = "info",
         name = "Apollo",
-        output = "console",
+        output = "file",
         file = "apollo.log",
     } = options;
 
