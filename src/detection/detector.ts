@@ -150,10 +150,10 @@ const SOURCE_EXTENSIONS = [".js", ".ts", ".mjs", ".cjs", ".jsx", ".tsx"];
 export function analyzeSourceFiles(pkg: PackageInfo, files: Map<string, string>): Finding[] {
     const findings: Finding[] = [];
     const seenPatterns = new Set<string>();
-    
 
     for (const [file, content] of files.entries()) {
         if (!SOURCE_EXTENSIONS.some(ext => file.endsWith(ext))) continue;
+        if (/\.(test|spec)\./i.test(file) || /\/(__tests__|tests?|fixtures?)\//i.test(file)) continue;
         for (const rule of SOURCE_RULES) {
             if (seenPatterns.has(rule.id)) continue;
             if (rule.test(content)) {
