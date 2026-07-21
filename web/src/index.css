@@ -1,0 +1,60 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;510;600&display=swap');
+
+body {
+  margin: 0;
+}
+
+.landing {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  background: #f7f7f5;
+  color: #37352f;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+.landing-inner {
+  max-width: 36rem;
+  padding: 2rem 1.5rem;
+  margin-left: clamp(1.5rem, 12vw, 8rem);
+}
+
+.landing h1 {
+  margin: 0 0 0.75rem;
+  font-size: clamp(2.5rem, 5vw, 3.25rem);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+}
+
+.landing p {
+  margin: 0 0 1.75rem;
+  font-size: 1.125rem;
+  line-height: 1.5;
+  color: #787774;
+}
+
+.cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #37352f;
+  font-size: 1rem;
+  font-weight: 510;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s ease, gap 0.15s ease;
+}
+
+.cta:hover {
+  border-bottom-color: #37352f;
+  gap: 0.55rem;
+}
+
+.cta span {
+  transition: transform 0.15s ease;
+}
+
+.cta:hover span {
+  transform: translateX(2px);
+}

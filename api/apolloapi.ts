@@ -3,9 +3,14 @@ import express from "express";
 import { existsSync, readFileSync } from "node:fs";
 import type { Request, Response } from "express";
 
+
 const PORT = 3000;
 const FINDINGS_FILE = "findings.jsonl";
 const app = express();
+app.use((req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "http://localhost:5173");
+    next();
+  });
 
 app.get("/findings", (req: Request, res: Response) =>  { 
     if (!existsSync(FINDINGS_FILE)) {
