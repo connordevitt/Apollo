@@ -8,12 +8,15 @@ const envTokenDestructure = new RegExp(`\\{[^}]*\\b(${TOKEN_NAMES})\\b[^}]*\\}\\
 const envDump = /JSON\.stringify\(\s*process\.env\b|Object\.(entries|keys|values)\(\s*process\.env\s*\)|\{\s*\.\.\.\s*process\.env\s*\}/;
 
 // Known exfil endpoints
-const WEBHOOK = /discord(app)?\.com\/api\/webhooks|api\.telegram\.org|webhook\.site|requestbin|pipedream\.net|burpcollaborator\.net|oastify\.com|interact\.sh/i;
+const WEBHOOK_EXFIL = /discord(app)?\.com\/api\/webhooks|webhook\.site|requestbin|pipedream\.net|burpcollaborator\.net|oastify\.com|interact\.sh/i;
+const WEBHOOK_DUAL = /api\.telegram\.org/i;
+const WEBHOOK = new RegExp(`${WEBHOOK_EXFIL.source}|${WEBHOOK_DUAL.source}`, "i");
 
 const NETWORK_SINK = /\bfetch\s*\(|\b(https?|http2)\.(request|get)\b|\bXMLHttpRequest\b|\baxios\b|\bgot\s*\(|\bnode-fetch\b|\bundici\b|\bfollow-redirects\b|\bsuperagent\b|\bneedle\b|\bWebSocket\s*\(|net\.(connect|createConnection)|dns\.(promises\.)?(lookup|resolve)|(require|import)\s*\(\s*['"`](node:)?(https?|http2|dns|net|undici|follow-redirects|ws|superagent|needle|request)['"`]\s*\)|\bcurl\b|\bwget\b|\bnslookup\b|\bdig\s|\bnc\s/i;
 const FS_READ = /readFileSync|readFile|createReadStream|openSync|\.open\(|readdirSync|readdir/;
 const SSH_PATH = /\.ssh[\/\\]|id_rsa|id_ed25519|id_ecdsa|authorized_keys/;
 const NPMRC_PATH = /\.npmrc/;
+const SECRET_MATERIAL = new RegExp(`${envTokenAccess.source}|${envTokenDestructure.source}|${envDump.source}|${SSH_PATH.source}|${NPMRC_PATH.source}`);
 const FIRST_PARTY = /(^|\.)(github|githubusercontent|npmjs|yarnpkg|gitlab|bitbucket|amazonaws|googleapis|azure)\.(com|org|net|io)$/i;
 const URL_LITERAL = /https?:\/\/[^\s'"`)]+/i;
 
@@ -142,7 +145,8 @@ const SOURCE_RULES: Rule[] = [
     { id: "env-token-read", pattern: "credential env var read", severity: "low", confidence: "low", test: s => envTokenAccess.test(s) || envTokenDestructure.test(s), evidence: new RegExp(`${envTokenAccess.source}|${envTokenDestructure.source}`) },
     { id: "ssh-key-read", pattern: "ssh key file read", severity: "medium", confidence: "low", test: s => near(s, SSH_PATH, FS_READ, 200), evidence: SSH_PATH },
     { id: "npmrc-read", pattern: ".npmrc read", severity: "medium", confidence: "low", test: s => near(s, NPMRC_PATH, FS_READ, 200), evidence: NPMRC_PATH },
-    { id: "webhook-exfil", pattern: "webhook exfil", severity: "critical", confidence: "medium", test: s => WEBHOOK.test(s), evidence: WEBHOOK },
+    { id: "webhook-exfil", pattern: "webhook exfil", severity: "critical", confidence: "medium", test: s => WEBHOOK_EXFIL.test(s), evidence: WEBHOOK_EXFIL },
+    { id: "webhook-exfil-secret", pattern: "webhook exfil (secret nearby)", severity: "critical", confidence: "medium", test: s => near(s, WEBHOOK_DUAL, SECRET_MATERIAL, 400), evidence: WEBHOOK_DUAL },
 ];
 
 const SOURCE_EXTENSIONS = [".js", ".ts", ".mjs", ".cjs", ".jsx", ".tsx"];
@@ -150,6 +154,7 @@ const SOURCE_EXTENSIONS = [".js", ".ts", ".mjs", ".cjs", ".jsx", ".tsx"];
 export function analyzeSourceFiles(pkg: PackageInfo, files: Map<string, string>): Finding[] {
     const findings: Finding[] = [];
     const seenPatterns = new Set<string>();
+    const seenLines = new Set<string>();
 
     for (const [file, content] of files.entries()) {
         if (!SOURCE_EXTENSIONS.some(ext => file.endsWith(ext))) continue;
@@ -157,7 +162,12 @@ export function analyzeSourceFiles(pkg: PackageInfo, files: Map<string, string>)
         for (const rule of SOURCE_RULES) {
             if (seenPatterns.has(rule.id)) continue;
             if (rule.test(content)) {
-                const evidence = extractEvidence(content, rule.evidence)
+                const evidence = extractEvidence(content, rule.evidence);
+                if (evidence.line !== undefined) {
+                    const key = `${file}:${evidence.line}`;
+                    if (seenLines.has(key)) continue;
+                    seenLines.add(key);
+                }
                 seenPatterns.add(rule.id);
                 findings.push({
                     package: pkg.name,
