@@ -5,7 +5,7 @@ export default function Landing() {
     <main className="landing ">
       <div className="landing-inner">
         <h1>Apollo</h1>
-        <p>
+        <p className="font-monospace font-size-sm">
           An npm registry scanner for supply chain attacks and malware.
         </p>
         <div className="d-flex gap-2 justify-content-center">

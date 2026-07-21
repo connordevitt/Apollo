@@ -14,7 +14,7 @@ body {
 }
 
 .landing-inner {
-  max-width: 36rem;
+  max-width: 45rem;
   padding: 2rem 1.5rem;
   margin-left: clamp(1.5rem, 12vw, 8rem);
 }
@@ -57,4 +57,67 @@ body {
 
 .cta:hover span {
   transform: translateX(2px);
+}
+
+.findings {
+  min-height: 100vh;
+  background: #f7f7f5;
+  color: #37352f;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+.findings-inner {
+  max-width: 72rem;
+  padding: 2.5rem 1.5rem 3rem;
+  margin: 0 auto;
+}
+
+.findings-back {
+  display: inline-block;
+  margin-bottom: 1.25rem;
+  color: #787774;
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
+.findings-back:hover {
+  color: #37352f;
+}
+
+.findings h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.findings-meta {
+  margin: 0 0 1.5rem;
+  color: #787774;
+  font-size: 0.9375rem;
+}
+
+.findings-table {
+  --bs-table-bg: transparent;
+  --bs-table-hover-bg: rgba(55, 53, 47, 0.04);
+  margin-bottom: 0;
+}
+
+.findings-table thead th {
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid rgba(55, 53, 47, 0.12) !important;
+  padding-top: 0.5rem;
+  padding-bottom: 0.75rem;
+}
+
+.findings-table tbody td {
+  border-bottom: 1px solid rgba(55, 53, 47, 0.06);
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.findings-snippet {
+  max-width: 280px;
+  color: #787774;
 }
