@@ -1,11 +1,11 @@
 // Copyright (C) 2026 Connor Devitt. Licensed under AGPL-3.0-only.
-import type { PackageInfo, Finding, Rule } from "../types.js";
+import type { PackageInfo, Finding, Rule, Severity, Confidence } from "../types.js";
 
 const TOKEN_NAMES = "NPM_TOKEN|NODE_AUTH_TOKEN|GITHUB_TOKEN|GH_TOKEN|GITLAB_TOKEN|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN";
 
 const envTokenAccess = new RegExp(`process\\.env(\\.|\\[\\s*['"\`])(${TOKEN_NAMES})\\b`);
 const envTokenDestructure = new RegExp(`\\{[^}]*\\b(${TOKEN_NAMES})\\b[^}]*\\}\\s*=\\s*process\\.env`);
-const envDump = /JSON\.stringify\(\s*process\.env\b|Object\.(entries|keys|values)\(\s*process\.env\s*\)|\{\s*\.\.\.\s*process\.env\s*\}/;
+const envDump = /JSON\.stringify\(\s*process\.env(?![\w.\[])|Object\.(entries|keys|values)\(\s*process\.env\s*\)|\{\s*\.\.\.\s*process\.env\s*\}/;
 
 // Known exfil endpoints
 const WEBHOOK_EXFIL = /discord(app)?\.com\/api\/webhooks|webhook\.site|requestbin|pipedream\.net|burpcollaborator\.net|oastify\.com|interact\.sh/i;
@@ -14,14 +14,13 @@ const WEBHOOK = new RegExp(`${WEBHOOK_EXFIL.source}|${WEBHOOK_DUAL.source}`, "i"
 
 const NETWORK_SINK = /\bfetch\s*\(|\b(https?|http2)\.(request|get)\b|\bXMLHttpRequest\b|\baxios\b|\bgot\s*\(|\bnode-fetch\b|\bundici\b|\bfollow-redirects\b|\bsuperagent\b|\bneedle\b|\bWebSocket\s*\(|net\.(connect|createConnection)|dns\.(promises\.)?(lookup|resolve)|(require|import)\s*\(\s*['"`](node:)?(https?|http2|dns|net|undici|follow-redirects|ws|superagent|needle|request)['"`]\s*\)|\bcurl\b|\bwget\b|\bnslookup\b|\bdig\s|\bnc\s/i;
 const FS_READ = /readFileSync|readFile|createReadStream|openSync|\.open\(|readdirSync|readdir/;
-const SSH_PATH = /\.ssh[\/\\]|id_rsa|id_ed25519|id_ecdsa|authorized_keys/;
+const SSH_PATH = /\.ssh[\/\\](?![\w./\\-]*\.pub\b)|id_rsa(?!\.pub)|id_ed25519(?!\.pub)|id_ecdsa(?!\.pub)|authorized_keys/;
 const NPMRC_PATH = /\.npmrc/;
 const SECRET_MATERIAL = new RegExp(`${envTokenAccess.source}|${envTokenDestructure.source}|${envDump.source}|${SSH_PATH.source}|${NPMRC_PATH.source}`);
 const FIRST_PARTY = /(^|\.)(github|githubusercontent|npmjs|yarnpkg|gitlab|bitbucket|amazonaws|googleapis|azure)\.(com|org|net|io)$/i;
+const FIRST_PARTY_CLIENT = /@?octokit\b|\bOctokit\b|api\.github\.com|githubusercontent\.com|api\.gitlab\.com|\bgoogleapis\b|@?aws-sdk\b/i;
 const URL_LITERAL = /https?:\/\/[^\s'"`)]+/i;
 
-// Stop at $ and { too, so a template-literal URL like `https://api.github.com${path}`
-// yields the host "api.github.com", not "api.github.com${path}".
 function hostOf(url: string): string | null {
     const m = /^https?:\/\/([^\/?#:\s'"`)${]+)/i.exec(url);
     return m ? m[1]! : null;
@@ -67,12 +66,69 @@ function credExfil(s: string, creds: RegExp, window = 600): boolean {
     const sinks = positions(NETWORK_SINK, s).filter(j => cred.some(i => Math.abs(i - j) <= window));
     if (sinks.length === 0) return false;
     const urls = positions(URL_LITERAL, s).filter(j => cred.some(i => Math.abs(i - j) <= window));
-  
-    if (urls.length === 0) return true;
+    if (urls.length === 0) return !FIRST_PARTY_CLIENT.test(s);
     return !urls.every(j => {
         const host = hostOf(s.slice(j, j + 200));
         return host !== null && (FIRST_PARTY.test(host) || isInternalHost(host));
     });
+}
+
+
+const SSH_CLIENT_LIB = /\bssh2\b|node-ssh|ssh2-sftp-client|\bsimple-git\b|nodegit|ssh-config/i;
+
+const META_VOCAB = /\bremediation\b|\bblock ?list\b|\ballow ?list\b|false[\s_-]?positive|\bseverity\b|\bdetectors?\b|\bheuristics?\b|\bIOC\b|threat[\s_-]?(pattern|model|intel|feed)|exfiltrat|malicious|\bCVE-|\bscanner\b|\bSAST\b|supply[\s-]?chain/gi;
+
+
+function isMinified(s: string): boolean {
+    if (s.length < 2000) return false;
+    let max = 0, run = 0, lines = 1;
+    for (let i = 0; i < s.length; i++) {
+        if (s[i] === "\n") { if (run > max) max = run; run = 0; lines++; }
+        else run++;
+    }
+    if (run > max) max = run;
+    return max > 1000 || s.length / lines > 300;
+}
+
+function secretFamilyCount(s: string): number {
+    let n = 0;
+    if (SSH_PATH.test(s)) n++;
+    if (NPMRC_PATH.test(s)) n++;
+    if (WEBHOOK.test(s)) n++;
+    if (envTokenAccess.test(s) || envTokenDestructure.test(s)) n++;
+    if (B64_DECODE.test(s)) n++;
+    if (/\.aws[\/\\]|AWS_SECRET|AWS_ACCESS_KEY|\.netrc|keychain|\bcredentials\.json\b/i.test(s)) n++;
+    return n;
+}
+
+function isAnalysisTooling(s: string): boolean {
+    const meta = s.match(META_VOCAB);
+    return (meta ? meta.length : 0) >= 3 && secretFamilyCount(s) >= 2;
+}
+
+interface FileContext { minified: boolean; tooling: boolean; sshClient: boolean; }
+
+const PROXIMITY_RULES = new Set([
+    "cred-exfil", "envdump-exfil", "ssh-exfil", "npmrc-exfil",
+    "eval-payload", "webhook-exfil-secret", "ssh-key-read", "npmrc-read",
+]);
+
+function contextAdjust(
+    rule: Rule, ctx: FileContext,
+): { severity: Severity; confidence: Confidence } {
+    const proximity = PROXIMITY_RULES.has(rule.id);
+
+    if (ctx.tooling && (proximity || rule.id === "webhook-exfil")) {
+        return { severity: "low", confidence: "low" };
+    }
+    let confidence = rule.confidence;
+    if (ctx.minified && proximity) {
+        confidence = "low"; // proximity is noise when the whole file is one line
+    }
+    if (ctx.sshClient && (rule.id === "ssh-exfil" || rule.id === "ssh-key-read")) {
+        confidence = "low"; 
+    }
+    return { severity: rule.severity, confidence };
 }
 
 // ── Install-script rules ────────────────────────────────────────────────────
@@ -158,7 +214,12 @@ export function analyzeSourceFiles(pkg: PackageInfo, files: Map<string, string>)
 
     for (const [file, content] of files.entries()) {
         if (!SOURCE_EXTENSIONS.some(ext => file.endsWith(ext))) continue;
-        if (/\.(test|spec)\./i.test(file) || /\/(__tests__|tests?|fixtures?)\//i.test(file)) continue;
+        if (/\.(test|spec)\./i.test(file) || /\/(__tests__|tests?|fixtures?|examples?|docs?|benchmarks?|samples?)\//i.test(file)) continue;
+        const ctx: FileContext = {
+            minified: isMinified(content),
+            tooling: isAnalysisTooling(content),
+            sshClient: SSH_CLIENT_LIB.test(content),
+        };
         for (const rule of SOURCE_RULES) {
             if (seenPatterns.has(rule.id)) continue;
             if (rule.test(content)) {
@@ -169,6 +230,7 @@ export function analyzeSourceFiles(pkg: PackageInfo, files: Map<string, string>)
                     seenLines.add(key);
                 }
                 seenPatterns.add(rule.id);
+                const { severity, confidence } = contextAdjust(rule, ctx);
                 findings.push({
                     package: pkg.name,
                     version: pkg.version,
@@ -176,8 +238,8 @@ export function analyzeSourceFiles(pkg: PackageInfo, files: Map<string, string>)
                     pattern: rule.pattern,
                     snippet: evidence.snippet,
                     line: evidence.line,
-                    severity: rule.severity,
-                    confidence: rule.confidence,
+                    severity,
+                    confidence,
                 });
             }
         }
