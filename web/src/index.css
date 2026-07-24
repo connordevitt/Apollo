@@ -4,46 +4,87 @@ body {
   margin: 0;
 }
 
+th {
+  cursor: pointer;
+}
+
 .landing {
   min-height: 100vh;
   display: flex;
-  align-items: center;
-  background: #f7f7f5;
+  align-items: stretch;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(255, 153, 0, 0.07), transparent 32rem),
+    #f7f7f5;
   color: #37352f;
   font-family: Inter, system-ui, sans-serif;
 }
 
 .landing-inner {
-  max-width: 45rem;
-  padding: 2rem 1.5rem;
-  margin-left: clamp(1.5rem, 12vw, 8rem);
+  flex: 1 1 50%;
+  width: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 2rem clamp(1.5rem, 6vw, 4rem);
+  box-sizing: border-box;
+}
+
+.landing-copy {
+  width: 100%;
+  max-width: 35rem;
+  animation: landing-copy-in 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.landing-visual {
+  flex: 1 1 50%;
+  width: 50%;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #000;
+  border-left: 1px solid rgba(55, 53, 47, 0.12);
+}
+
+.landing-visual img {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+  animation: landing-image-in 1s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .landing h1 {
   margin: 0 0 0.75rem;
-  font-size: clamp(2.5rem, 5vw, 3.25rem);
+  font-size: clamp(3rem, 6vw, 4.75rem);
   font-weight: 600;
-  letter-spacing: -0.04em;
-  line-height: 1.1;
+  letter-spacing: -0.055em;
+  line-height: 0.95;
 }
 
 .landing p {
   margin: 0 0 1.75rem;
-  font-size: 1.125rem;
-  line-height: 1.5;
+  max-width: 34rem;
+  font-size: clamp(0.9rem, 1.2vw, 1rem);
+  line-height: 1.65;
+  letter-spacing: -0.015em;
   color: #787774;
 }
 
 .cta {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.45rem;
+  margin-left: 50%;
+  transform: translateX(-50%);
   color: #37352f;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 510;
   text-decoration: none;
   border-bottom: 1px solid transparent;
-  transition: border-color 0.15s ease, gap 0.15s ease;
+  transition: border-color 0.2s ease, gap 0.2s ease;
 }
 
 .cta:hover {
@@ -57,6 +98,78 @@ body {
 
 .cta:hover span {
   transform: translateX(2px);
+}
+
+.footer {
+  background: #efeee9;
+  color: #37352f;
+  font-family: Inter, system-ui, sans-serif;
+  border-top: 1px solid rgba(55, 53, 47, 0.12);
+}
+.footer-inner {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+}
+.footer p {
+  margin: 0;
+  color: #787774;
+}
+
+@keyframes landing-copy-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes landing-image-in {
+  from {
+    opacity: 0;
+    transform: scale(1.025);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (max-width: 560px) {
+  .landing {
+    flex-direction: column;
+  }
+
+  .landing-inner,
+  .landing-visual {
+    width: 100%;
+  }
+
+  .landing-inner {
+    min-height: 55vh;
+    padding: 4rem 1.5rem;
+  }
+
+  .landing-visual {
+    min-height: 45vh;
+    border-top: 1px solid rgba(55, 53, 47, 0.12);
+    border-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-copy,
+  .landing-visual img {
+    animation: none;
+  }
+
+  .cta,
+  .cta span {
+    transition: none;
+  }
 }
 
 .findings {

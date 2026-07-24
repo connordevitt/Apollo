@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 
 type Finding = {
@@ -26,8 +26,11 @@ function severityClass(severity: string) {
   }
 }
 
+
 export default function Findings() {
   const [findings, setFindings] = useState<Finding[] | null>(null);
+
+  const [sortConfig, setSortConfig] = useState<{ key: keyof Finding; direction: 'asc' | 'desc' } | null>(null);
 
   useEffect(() => {
     fetch("http://localhost:3000/findings")
@@ -35,6 +38,34 @@ export default function Findings() {
       .then((data) => setFindings(data))
       .catch((err) => console.error("fetch failed", err));
   }, []);
+
+  const sortedFindings = useMemo(() => {
+    const results = [...(findings ?? [])];
+
+    if (sortConfig) {
+      results.sort((a, b) => {
+        const valueA = a[sortConfig.key];
+        const valueB = b[sortConfig.key];
+
+        if (valueA < valueB) { 
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (valueA > valueB) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return results;
+  }, [findings, sortConfig]);
+
+  const requestSort = (key: keyof Finding) => {
+    setSortConfig((current) => ({
+      key,
+      direction:
+        current?.key === key && current?.direction === "asc" ? "desc" : "asc",
+    }));
+  };
 
   if (findings === null) {
     return (
@@ -59,15 +90,15 @@ export default function Findings() {
           <table className="table table-sm table-borderless table-hover align-middle findings-table">
             <thead>
               <tr className="small text-uppercase text-muted">
-                <th>Severity</th>
-                <th>Package</th>
-                <th>Version</th>
-                <th>Pattern</th>
-                <th>Snippet</th>
+                <th onClick={() => requestSort("severity")}>Severity</th>
+                <th onClick={() => requestSort("package")}>Package</th>
+                <th onClick={() => requestSort("version")}>Version</th>
+                <th onClick={() => requestSort("pattern")}>Pattern</th>
+                <th onClick={() => requestSort("snippet")}>Snippet</th>
               </tr>
             </thead>
             <tbody>
-              {findings.map((finding) => (
+              {sortedFindings.map((finding) => (
                 <tr
                   key={`${finding.package}-${finding.version}-${finding.hook}-${finding.line}-${finding.pattern}`}
                 >

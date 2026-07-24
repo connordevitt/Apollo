@@ -6,12 +6,13 @@ const TOKEN_NAMES = "NPM_TOKEN|NODE_AUTH_TOKEN|GITHUB_TOKEN|GH_TOKEN|GITLAB_TOKE
 const envTokenAccess = new RegExp(`process\\.env(\\.|\\[\\s*['"\`])(${TOKEN_NAMES})\\b`);
 const envTokenDestructure = new RegExp(`\\{[^}]*\\b(${TOKEN_NAMES})\\b[^}]*\\}\\s*=\\s*process\\.env`);
 const envDump = /JSON\.stringify\(\s*process\.env(?![\w.\[])|Object\.(entries|keys|values)\(\s*process\.env\s*\)|\{\s*\.\.\.\s*process\.env\s*\}/;
+const HARDCODED_CRED = new RegExp(
+    `process\\.env(?:\\.|\\[\\s*['"\`])(?:${TOKEN_NAMES})\\b[\\s\\]'"\`]*(?:\\?\\?|\\|\\|)\\s*['"\`](?=[A-Za-z0-9_\\-]*[0-9])[A-Za-z0-9_\\-]{12,}['"\`]`,
+);
 
-// Known exfil endpoints
-const WEBHOOK_EXFIL = /discord(app)?\.com\/api\/webhooks|webhook\.site|requestbin|pipedream\.net|burpcollaborator\.net|oastify\.com|interact\.sh/i;
+const WEBHOOK_EXFIL = /discord(app)?\.com\/api\/webhooks|webhook\.site|requestbin\.(com|net)|requestb\.in|pipedream\.net|burpcollaborator\.net|oastify\.com|interact\.sh/i;
 const WEBHOOK_DUAL = /api\.telegram\.org/i;
 const WEBHOOK = new RegExp(`${WEBHOOK_EXFIL.source}|${WEBHOOK_DUAL.source}`, "i");
-
 const NETWORK_SINK = /\bfetch\s*\(|\b(https?|http2)\.(request|get)\b|\bXMLHttpRequest\b|\baxios\b|\bgot\s*\(|\bnode-fetch\b|\bundici\b|\bfollow-redirects\b|\bsuperagent\b|\bneedle\b|\bWebSocket\s*\(|net\.(connect|createConnection)|dns\.(promises\.)?(lookup|resolve)|(require|import)\s*\(\s*['"`](node:)?(https?|http2|dns|net|undici|follow-redirects|ws|superagent|needle|request)['"`]\s*\)|\bcurl\b|\bwget\b|\bnslookup\b|\bdig\s|\bnc\s/i;
 const FS_READ = /readFileSync|readFile|createReadStream|openSync|\.open\(|readdirSync|readdir/;
 const SSH_PATH = /\.ssh[\/\\](?![\w./\\-]*\.pub\b)|id_rsa(?!\.pub)|id_ed25519(?!\.pub)|id_ecdsa(?!\.pub)|authorized_keys/;
@@ -19,6 +20,7 @@ const NPMRC_PATH = /\.npmrc/;
 const SECRET_MATERIAL = new RegExp(`${envTokenAccess.source}|${envTokenDestructure.source}|${envDump.source}|${SSH_PATH.source}|${NPMRC_PATH.source}`);
 const FIRST_PARTY = /(^|\.)(github|githubusercontent|npmjs|yarnpkg|gitlab|bitbucket|amazonaws|googleapis|azure)\.(com|org|net|io)$/i;
 const FIRST_PARTY_CLIENT = /@?octokit\b|\bOctokit\b|api\.github\.com|githubusercontent\.com|api\.gitlab\.com|\bgoogleapis\b|@?aws-sdk\b/i;
+const FIRST_PARTY_HOST = /\b(amazonaws\.com|googleapis\.com|github(usercontent)?\.com|gitlab\.com|npmjs\.(org|com)|yarnpkg\.com|bitbucket\.org|core\.windows\.net)\b/i;
 const URL_LITERAL = /https?:\/\/[^\s'"`)]+/i;
 
 function hostOf(url: string): string | null {
@@ -60,16 +62,36 @@ function near(s: string, a: RegExp, b: RegExp, window = 400): boolean {
 }
 
 
+function nearHasFirstPartyHost(s: string, anchors: number[], window: number): boolean {
+    return anchors.some(i => FIRST_PARTY_HOST.test(s.slice(Math.max(0, i - window), i + window)));
+}
+
+// A credential read that is returned, used as a ??/|| fallback, or an `if (...)` existence
+// guard is being *resolved*, not sent — the token flows out to the caller, not into a sink.
+// Real exfil keeps the credential as an argument/value (`body: process.env.X`), which stays active.
+function isPassiveCredRead(s: string, pos: number): boolean {
+    const before = s.slice(Math.max(0, pos - 24), pos);
+    if (/(?:return|=>|\?\?|\|\|)\s*$/.test(before)) return true; // returned / fallback operand
+    if (/\bif\s*\(\s*$/.test(before)) return true;                // existence guard
+    const after = s.slice(pos, pos + 96);
+    if (/^process\.env(?:\.\w+|\[\s*['"`][^'"`]+['"`]\s*\])\s*(?:\?\?|\|\|)/.test(after)) return true; // left of a fallback
+    return false;
+}
+
 function credExfil(s: string, creds: RegExp, window = 600): boolean {
-    const cred = positions(creds, s);
+    const cred = positions(creds, s).filter(i => !isPassiveCredRead(s, i));
     if (cred.length === 0) return false;
     const sinks = positions(NETWORK_SINK, s).filter(j => cred.some(i => Math.abs(i - j) <= window));
     if (sinks.length === 0) return false;
     const urls = positions(URL_LITERAL, s).filter(j => cred.some(i => Math.abs(i - j) <= window));
-    if (urls.length === 0) return !FIRST_PARTY_CLIENT.test(s);
+    if (urls.length === 0) {
+        return !FIRST_PARTY_CLIENT.test(s) && !nearHasFirstPartyHost(s, cred, window);
+    }
     return !urls.every(j => {
-        const host = hostOf(s.slice(j, j + 200));
-        return host !== null && (FIRST_PARTY.test(host) || isInternalHost(host));
+        const slice = s.slice(j, j + 200);
+        const host = hostOf(slice);
+        if (host !== null) return FIRST_PARTY.test(host) || isInternalHost(host);
+        return FIRST_PARTY_HOST.test(slice);
     });
 }
 
@@ -106,7 +128,16 @@ function isAnalysisTooling(s: string): boolean {
     return (meta ? meta.length : 0) >= 3 && secretFamilyCount(s) >= 2;
 }
 
-interface FileContext { minified: boolean; tooling: boolean; sshClient: boolean; }
+const SECRET_FILE_TOKEN = /id_rsa|id_ed25519|id_ecdsa|authorized_keys|\.pem\b|\.key\b|\.secret\b|\.env\b|\.npmrc\b|credentials/gi;
+function isSecretBlocklist(s: string): boolean {
+    const p = positions(SECRET_FILE_TOKEN, s);
+    for (let i = 0; i + 2 < p.length; i++) {
+        if (p[i + 2]! - p[i]! <= 120) return true; // >=3 families within 120 chars
+    }
+    return false;
+}
+
+interface FileContext { minified: boolean; tooling: boolean; sshClient: boolean; secretBlocklist: boolean; }
 
 const PROXIMITY_RULES = new Set([
     "cred-exfil", "envdump-exfil", "ssh-exfil", "npmrc-exfil",
@@ -123,10 +154,13 @@ function contextAdjust(
     }
     let confidence = rule.confidence;
     if (ctx.minified && proximity) {
-        confidence = "low"; // proximity is noise when the whole file is one line
+        confidence = "low"; 
     }
     if (ctx.sshClient && (rule.id === "ssh-exfil" || rule.id === "ssh-key-read")) {
-        confidence = "low"; 
+        confidence = "low";
+    }
+    if (ctx.secretBlocklist && (rule.id === "ssh-exfil" || rule.id === "ssh-key-read" || rule.id === "npmrc-exfil" || rule.id === "npmrc-read")) {
+        confidence = "low";
     }
     return { severity: rule.severity, confidence };
 }
@@ -193,9 +227,10 @@ function extractEvidence(
 const SOURCE_RULES: Rule[] = [
     // Compound / high-confidence — real exfil shapes.
     { id: "cred-exfil", pattern: "credential read + network sink", severity: "critical", confidence: "high", test: s => credExfil(s, new RegExp(`${envTokenAccess.source}|${envTokenDestructure.source}`)), evidence: new RegExp(`${envTokenAccess.source}|${envTokenDestructure.source}`) },
+    { id: "hardcoded-cred", pattern: "hardcoded credential fallback", severity: "critical", confidence: "high", test: s => HARDCODED_CRED.test(s), evidence: HARDCODED_CRED },
     { id: "envdump-exfil", pattern: "process.env dump + network sink", severity: "critical", confidence: "high", test: s => near(s, envDump, NETWORK_SINK, 400), evidence: envDump },
     { id: "ssh-exfil", pattern: "ssh key read + network sink", severity: "critical", confidence: "high", test: s => near(s, SSH_PATH, FS_READ, 200) && NETWORK_SINK.test(s), evidence: SSH_PATH },
-    { id: "npmrc-exfil", pattern: ".npmrc read + network sink", severity: "critical", confidence: "high", test: s => near(s, NPMRC_PATH, NETWORK_SINK, 400), evidence: NPMRC_PATH },
+    { id: "npmrc-exfil", pattern: ".npmrc read + network sink", severity: "critical", confidence: "high", test: s => near(s, NPMRC_PATH, FS_READ, 200) && NETWORK_SINK.test(s), evidence: NPMRC_PATH },
     { id: "eval-payload", pattern: "eval of decoded payload", severity: "high", confidence: "high", test: s => near(s, /\beval\s*\(/, B64_DECODE, 200), evidence: new RegExp(`${B64_DECODE.source}|\\beval\\s*\\(`, "i") },
     { id: "env-dump", pattern: "process.env dump", severity: "low", confidence: "low", test: s => envDump.test(s), evidence: envDump },
     { id: "env-token-read", pattern: "credential env var read", severity: "low", confidence: "low", test: s => envTokenAccess.test(s) || envTokenDestructure.test(s), evidence: new RegExp(`${envTokenAccess.source}|${envTokenDestructure.source}`) },
@@ -219,6 +254,7 @@ export function analyzeSourceFiles(pkg: PackageInfo, files: Map<string, string>)
             minified: isMinified(content),
             tooling: isAnalysisTooling(content),
             sshClient: SSH_CLIENT_LIB.test(content),
+            secretBlocklist: isSecretBlocklist(content),
         };
         for (const rule of SOURCE_RULES) {
             if (seenPatterns.has(rule.id)) continue;
