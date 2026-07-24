@@ -40,12 +40,19 @@ export default function Findings() {
   }, []);
 
   const sortedFindings = useMemo(() => {
+    const severityMap = {
+      "critical": 1,
+      "high": 2,
+      "medium": 3,
+      "low": 4,
+    }
+    
     const results = [...(findings ?? [])];
 
     if (sortConfig) {
       results.sort((a, b) => {
-        const valueA = a[sortConfig.key];
-        const valueB = b[sortConfig.key];
+        const valueA = sortConfig.key === "severity" ? severityMap[a.severity as keyof typeof severityMap] : a[sortConfig.key];
+        const valueB = sortConfig.key === "severity" ? severityMap[b.severity as keyof typeof severityMap] : b[sortConfig.key];
 
         if (valueA < valueB) { 
           return sortConfig.direction === 'asc' ? -1 : 1;
