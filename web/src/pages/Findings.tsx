@@ -11,6 +11,7 @@ type Finding = {
   severity: string;
   confidence: string;
   score: number;
+  flaggedAt: string;
 };
 
 function severityClass(severity: string) {
@@ -102,6 +103,7 @@ export default function Findings() {
                 <th onClick={() => requestSort("version")}>Version</th>
                 <th onClick={() => requestSort("pattern")}>Pattern</th>
                 <th onClick={() => requestSort("snippet")}>Snippet</th>
+                <th onClick={() => requestSort("flaggedAt")}>Flagged At</th>
               </tr>
             </thead>
             <tbody>
@@ -125,6 +127,7 @@ export default function Findings() {
                   >
                     {finding.snippet}
                   </td>
+                  <td className="text-muted small">{finding.flaggedAt}</td>
                 </tr>
               ))}
             </tbody>
