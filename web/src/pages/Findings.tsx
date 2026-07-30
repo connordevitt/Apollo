@@ -1,6 +1,8 @@
 import { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 
+type Severity = "critical" | "high" | "medium" | "low";
+
 type Finding = {
   package: string;
   version: string;
@@ -8,64 +10,95 @@ type Finding = {
   pattern: string;
   snippet: string;
   line: number;
-  severity: string;
+  severity: Severity;
   confidence: string;
   score: number;
-  flaggedAt: string;
+  flaggedAt?: string;
 };
 
-function severityClass(severity: string) {
-  switch (severity) {
-    case "critical":
-      return "text-bg-danger";
-    case "high":
-      return "text-bg-warning";
-    case "medium":
-      return "text-bg-info";
-    default:
-      return "text-bg-secondary";
-  }
-}
+type SortConfig = {
+  key: keyof Finding;
+  direction: "asc" | "desc";
+};
 
+const severityOrder: Record<Severity, number> = {
+  critical: 1,
+  high: 2,
+  medium: 3,
+  low: 4,
+};
+
+const severityFilters: Array<Severity | "all"> = [
+  "all",
+  "critical",
+  "high",
+  "medium",
+  "low",
+];
 
 export default function Findings() {
   const [findings, setFindings] = useState<Finding[] | null>(null);
-
-  const [sortConfig, setSortConfig] = useState<{ key: keyof Finding; direction: 'asc' | 'desc' } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [severityFilter, setSeverityFilter] = useState<Severity | "all">("all");
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
 
   useEffect(() => {
     fetch("http://localhost:3000/findings")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`API returned ${res.status}`);
+        }
+        return res.json();
+      })
       .then((data) => setFindings(data))
-      .catch((err) => console.error("fetch failed", err));
+      .catch((err: Error) => {
+        console.error("fetch failed", err);
+        setError("Findings could not be loaded. Check that the Apollo API is running.");
+      });
   }, []);
 
-  const sortedFindings = useMemo(() => {
-    const severityMap = {
-      "critical": 1,
-      "high": 2,
-      "medium": 3,
-      "low": 4,
+  const counts = useMemo(() => {
+    const next: Record<Severity, number> = {
+      critical: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
+    };
+
+    for (const finding of findings ?? []) {
+      next[finding.severity]++;
     }
-    
-    const results = [...(findings ?? [])];
+
+    return next;
+  }, [findings]);
+
+  const sortedFindings = useMemo(() => {
+    const results = (findings ?? []).filter(
+      (finding) => severityFilter === "all" || finding.severity === severityFilter,
+    );
 
     if (sortConfig) {
       results.sort((a, b) => {
-        const valueA = sortConfig.key === "severity" ? severityMap[a.severity as keyof typeof severityMap] : a[sortConfig.key];
-        const valueB = sortConfig.key === "severity" ? severityMap[b.severity as keyof typeof severityMap] : b[sortConfig.key];
+        const valueA =
+          sortConfig.key === "severity"
+            ? severityOrder[a.severity]
+            : (a[sortConfig.key] ?? "");
+        const valueB =
+          sortConfig.key === "severity"
+            ? severityOrder[b.severity]
+            : (b[sortConfig.key] ?? "");
 
-        if (valueA < valueB) { 
-          return sortConfig.direction === 'asc' ? -1 : 1;
+        if (valueA < valueB) {
+          return sortConfig.direction === "asc" ? -1 : 1;
         }
         if (valueA > valueB) {
-          return sortConfig.direction === 'asc' ? 1 : -1;
+          return sortConfig.direction === "asc" ? 1 : -1;
         }
         return 0;
       });
     }
     return results;
-  }, [findings, sortConfig]);
+  }, [findings, severityFilter, sortConfig]);
 
   const requestSort = (key: keyof Finding) => {
     setSortConfig((current) => ({
@@ -75,11 +108,40 @@ export default function Findings() {
     }));
   };
 
+  const sortLabel = (key: keyof Finding) =>
+    sortConfig?.key === key
+      ? sortConfig.direction === "asc"
+        ? " ↑"
+        : " ↓"
+      : "";
+
+  if (error) {
+    return (
+      <main className="findings">
+        <div className="findings-inner">
+          <Link to="/" className="findings-back">
+            ← Apollo
+          </Link>
+          <div className="findings-state" role="alert">
+            <span className="findings-state-mark">!</span>
+            <div>
+              <h1>Connection interrupted</h1>
+              <p>{error}</p>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   if (findings === null) {
     return (
       <main className="findings">
         <div className="findings-inner">
-          <p className="text-muted mb-0">Loading…</p>
+          <p className="findings-loading">
+            <span aria-hidden="true" />
+            Reading the registry ledger…
+          </p>
         </div>
       </main>
     );
@@ -91,43 +153,108 @@ export default function Findings() {
         <Link to="/" className="findings-back">
           ← Apollo
         </Link>
-        <h1>Findings</h1>
-        <p className="findings-meta">{findings.length} results</p>
+        <header className="findings-header">
+          <div>
+            <p className="findings-eyebrow">Registry intelligence</p>
+            <h1>Findings</h1>
+            <p className="findings-description">
+              Potential supply-chain threats detected across npm packages.
+            </p>
+          </div>
+          <div className="findings-total">
+            <strong>{findings.length}</strong>
+            <span>flagged {findings.length === 1 ? "finding" : "findings"}</span>
+          </div>
+        </header>
 
-        <div className="table-responsive">
-          <table className="table table-sm table-borderless table-hover align-middle findings-table">
+        <nav className="findings-filters" aria-label="Filter findings by severity">
+          {severityFilters.map((severity) => {
+            const count =
+              severity === "all" ? findings.length : counts[severity];
+            return (
+              <button
+                className={severityFilter === severity ? "is-active" : ""}
+                key={severity}
+                type="button"
+                onClick={() => setSeverityFilter(severity)}
+                aria-pressed={severityFilter === severity}
+              >
+                <span>{severity}</span>
+                <strong>{count}</strong>
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="findings-ledger table-responsive">
+          <table className="findings-table">
             <thead>
-              <tr className="small text-uppercase text-muted">
-                <th onClick={() => requestSort("severity")}>Severity</th>
-                <th onClick={() => requestSort("package")}>Package</th>
-                <th onClick={() => requestSort("version")}>Version</th>
-                <th onClick={() => requestSort("pattern")}>Pattern</th>
-                <th onClick={() => requestSort("snippet")}>Snippet</th>
-                <th onClick={() => requestSort("flaggedAt")}>Flagged At</th>
+              <tr>
+                <th>
+                  <button type="button" onClick={() => requestSort("severity")}>
+                    Severity{sortLabel("severity")}
+                  </button>
+                </th>
+                <th>
+                  <button type="button" onClick={() => requestSort("package")}>
+                    Package / location{sortLabel("package")}
+                  </button>
+                </th>
+                <th>
+                  <button type="button" onClick={() => requestSort("pattern")}>
+                    Detection{sortLabel("pattern")}
+                  </button>
+                </th>
+                <th>Evidence</th>
+                <th>
+                  <button type="button" onClick={() => requestSort("flaggedAt")}>
+                    Flagged{sortLabel("flaggedAt")}
+                  </button>
+                </th>
               </tr>
             </thead>
             <tbody>
-              {sortedFindings.map((finding) => (
+              {sortedFindings.length === 0 ? (
+                <tr>
+                  <td className="findings-empty" colSpan={5}>
+                    No {severityFilter} findings in the ledger.
+                  </td>
+                </tr>
+              ) : sortedFindings.map((finding) => (
                 <tr
+                  className={`finding-row finding-row--${finding.severity}`}
                   key={`${finding.package}-${finding.version}-${finding.hook}-${finding.line}-${finding.pattern}`}
                 >
                   <td>
-                    <span
-                      className={`badge rounded-pill ${severityClass(finding.severity)}`}
-                    >
+                    <span className={`severity-badge severity-badge--${finding.severity}`}>
                       {finding.severity}
                     </span>
                   </td>
-                  <td className="fw-semibold">{finding.package}</td>
-                  <td className="text-muted small">{finding.version}</td>
-                  <td className="small">{finding.pattern}</td>
-                  <td
-                    className="small font-monospace text-truncate findings-snippet"
-                    title={finding.snippet}
-                  >
-                    {finding.snippet}
+                  <td>
+                    <strong className="finding-package">{finding.package}</strong>
+                    <span className="finding-location">
+                      {finding.version} · {finding.hook}
+                      {finding.line != null ? `:${finding.line}` : ""}
+                    </span>
                   </td>
-                  <td className="text-muted small">{finding.flaggedAt}</td>
+                  <td>
+                    <span className="finding-pattern">{finding.pattern}</span>
+                    <span className="finding-confidence">
+                      {finding.confidence} confidence
+                    </span>
+                  </td>
+                  <td>
+                    <code className="findings-snippet" title={finding.snippet}>
+                      {finding.snippet}
+                    </code>
+                  </td>
+                  <td>
+                    {finding.flaggedAt ? (
+                      <time className="finding-date">{finding.flaggedAt}</time>
+                    ) : (
+                      <span className="finding-date finding-date--missing">—</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -23,4 +23,4 @@ app.get("/findings", (req: Request, res: Response) =>  {
     res.json(findingsArray);
 }); 
 
-app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Apollo API Server is running on port ${PORT}`));
