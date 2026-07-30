@@ -170,9 +170,7 @@ body {
 
 .findings {
   min-height: 100vh;
-  background:
-    linear-gradient(rgba(49, 94, 158, 0.035) 1px, transparent 1px),
-    #f3f5f7;
+  background: #f3f5f7;
   background-size: 100% 3rem;
   color: #17202a;
   font-family: "IBM Plex Sans", system-ui, sans-serif;
@@ -343,7 +341,7 @@ body {
 }
 
 .findings-table th:nth-child(5) {
-  width: 10%;
+  width: 24%;
 }
 
 .findings-table thead th {

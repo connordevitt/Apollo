@@ -157,9 +157,6 @@ export default function Findings() {
           <div>
             <p className="findings-eyebrow">Registry intelligence</p>
             <h1>Findings</h1>
-            <p className="findings-description">
-              Potential supply-chain threats detected across npm packages.
-            </p>
           </div>
           <div className="findings-total">
             <strong>{findings.length}</strong>
@@ -250,7 +247,7 @@ export default function Findings() {
                   </td>
                   <td>
                     {finding.flaggedAt ? (
-                      <time className="finding-date">{finding.flaggedAt}</time>
+                      <time className="finding-date fw-bold fs-6">{finding.flaggedAt}</time>
                     ) : (
                       <span className="finding-date finding-date--missing">—</span>
                     )}

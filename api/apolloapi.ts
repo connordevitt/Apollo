@@ -2,15 +2,19 @@
 import express from "express";
 import { existsSync, readFileSync } from "node:fs";
 import type { Request, Response } from "express";
-
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 
 const PORT = 3000;
-const FINDINGS_FILE = "findings.jsonl";
+const _dirname = dirname(fileURLToPath(import.meta.url));
+const FINDINGS_FILE = resolve(_dirname, "../findings.jsonl");
 const app = express();
 app.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", "http://localhost:5173");
     next();
   });
+
+app.disable("x-powered-by");
 
 app.get("/findings", (req: Request, res: Response) =>  { 
     if (!existsSync(FINDINGS_FILE)) {
@@ -22,5 +26,15 @@ app.get("/findings", (req: Request, res: Response) =>  {
     const findingsArray = splitFindings.map(finding => JSON.parse(finding));
     res.json(findingsArray);
 }); 
+
+app.all("/findings", (req: Request, res: Response) => {
+    res
+      .set("Allow", "GET, HEAD")
+      .status(405)
+      .json({
+        error: "Method not allowed",
+        method: req.method,
+      });
+})
 
 app.listen(PORT, () => console.log(`Apollo API Server is running on port ${PORT}`));

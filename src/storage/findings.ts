@@ -17,12 +17,6 @@ export function saveFindings(findings: Finding[]) {
         existing.pattern === finding.pattern
     ));
 
-    const flaggedAt = new Intl.DateTimeFormat("en-US", {
-        month: "2-digit",
-        day: "2-digit",
-        year: "numeric",
-    }).format(new Date());
-
-
+    const flaggedAt = new Date().toISOString();
     appendFileSync(FINDINGS_FILE, newFindings.map(finding => JSON.stringify({ ...finding, flaggedAt }) + '\n').join(''));
 }
