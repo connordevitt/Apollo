@@ -16,5 +16,13 @@ export function saveFindings(findings: Finding[]) {
         existing.hook === finding.hook &&
         existing.pattern === finding.pattern
     ));
-    appendFileSync(FINDINGS_FILE, newFindings.map(finding => JSON.stringify(finding) + '\n').join(''));
+
+    const flaggedAt = new Intl.DateTimeFormat("en-US", {
+        month: "2-digit",
+        day: "2-digit",
+        year: "numeric",
+    }).format(new Date());
+
+
+    appendFileSync(FINDINGS_FILE, newFindings.map(finding => JSON.stringify({ ...finding, flaggedAt }) + '\n').join(''));
 }
