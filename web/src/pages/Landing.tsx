@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import apollo from "../assets/apollo2.png";
+import apollo from "../assets/Apollo2.png";
 
 export default function Landing() {
   return (
