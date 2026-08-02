@@ -19,16 +19,6 @@ export interface Finding {
 }
 
 
-export interface Rule {
-    id: string;
-    pattern: string;
-    severity: Severity;
-    confidence: Confidence;
-    test: (script: string) => boolean;
-    evidence?: RegExp;
-}
-
-
 export interface PackageScore {
     score: number;
     verdict: Verdict;
